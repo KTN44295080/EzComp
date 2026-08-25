@@ -35,7 +35,17 @@ export interface LayerAdjustments {
   shadowBlur: number;
   shadowOffsetX: number;
   shadowOffsetY: number;
+  highlightColor: string;
+  highlightTint: number;
+  shadowColor: string;
+  shadowTint: number;
+  lightingBalance: number;
+  keyLightStrength: number;
+  keyLightAngle: number;
+  keyLightSoftness: number;
 }
+
+export type NumericLayerAdjustmentKey = { [Key in keyof LayerAdjustments]: LayerAdjustments[Key] extends number ? Key : never }[keyof LayerAdjustments];
 
 export interface RasterLayer {
   id: string;
@@ -63,6 +73,9 @@ export const defaultAdjustments = (): LayerAdjustments => ({
   exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0,
   shadows: 0, highlights: 0, blur: 0,
   shadowOpacity: 0, shadowBlur: 18, shadowOffsetX: 0, shadowOffsetY: 14,
+  highlightColor: '#ff91c8', highlightTint: 0,
+  shadowColor: '#65b9ff', shadowTint: 0, lightingBalance: 0,
+  keyLightStrength: 0, keyLightAngle: 315, keyLightSoftness: 70,
 });
 
 export const defaultDocument = (): CompositeDocument => ({

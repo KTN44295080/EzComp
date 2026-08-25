@@ -10,6 +10,8 @@ EzComp is a local-first web compositor for matching existing image assets withou
 - Canvas move, uniform scale handles, rotation handle, pan, zoom, and fit
 - Exposure, contrast, saturation, temperature, tint, blur, opacity, and blend mode
 - Browser-local auto compositing with a stable backdrop reference, shared scene grading, optional local-light sampling, and explicit reference-layer selection
+- Non-destructive split-tone lighting with Pink × Cyan, Neon Split, Sunset, and Moonlight presets
+- Editable highlight/shadow colors plus directional key-light strength, angle, balance, and softness
 - Balanced, Cinematic, Soft, Night, and Vivid matching presets
 - Editable shadow/highlight matching and non-destructive integration shadows
 - Per-adjustment reset, color reset, transform reset, and all-layer-value reset
