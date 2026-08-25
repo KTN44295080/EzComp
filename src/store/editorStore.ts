@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { defaultAdjustments, defaultDocument, type CompositeDocument, type EditorTool, type LayerAdjustments, type LayerTransform, type RasterLayer, type ViewportState } from '../types/editor';
+import { makeId } from '../lib/id';
 
 interface HistorySnapshot { document: CompositeDocument; layers: RasterLayer[]; selectedLayerId: string | null }
 interface EditorState {
@@ -51,7 +52,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   resetAdjustment: (id, key) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, adjustments: { ...layer.adjustments, [key]: defaultAdjustments()[key] } } : layer) })),
   resetLayerValues: (id) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, opacity: 100, blendMode: 'source-over', transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }, adjustments: defaultAdjustments() } : layer), message: 'Layer values reset' })),
   removeLayer: (id) => set((state) => { const next = state.layers.filter((l) => l.id !== id); return withHistory(state, { layers: next, selectedLayerId: state.selectedLayerId === id ? next.at(-1)?.id ?? null : state.selectedLayerId, message: 'Layer removed' }); }),
-  duplicateLayer: (id) => set((state) => { const index = state.layers.findIndex((l) => l.id === id); const source = state.layers[index]; if (!source) return state; const copy = { ...structuredClone(source), id: crypto.randomUUID(), name: `${source.name} copy`, transform: { ...source.transform, x: source.transform.x + 20, y: source.transform.y + 20 } }; const layers = [...state.layers]; layers.splice(index + 1, 0, copy); return withHistory(state, { layers, selectedLayerId: copy.id, message: 'Layer duplicated' }); }),
+  duplicateLayer: (id) => set((state) => { const index = state.layers.findIndex((l) => l.id === id); const source = state.layers[index]; if (!source) return state; const copy = { ...structuredClone(source), id: makeId(), name: `${source.name} copy`, transform: { ...source.transform, x: source.transform.x + 20, y: source.transform.y + 20 } }; const layers = [...state.layers]; layers.splice(index + 1, 0, copy); return withHistory(state, { layers, selectedLayerId: copy.id, message: 'Layer duplicated' }); }),
   moveLayer: (id, direction) => set((state) => { const from = state.layers.findIndex((l) => l.id === id); const to = direction === 'up' ? from + 1 : from - 1; if (from < 0 || to < 0 || to >= state.layers.length) return state; const layers = [...state.layers]; const [layer] = layers.splice(from, 1); if (!layer) return state; layers.splice(to, 0, layer); return withHistory(state, { layers }); }),
   setViewport: (patch) => set((state) => ({ viewport: { ...state.viewport, ...patch } })), setTool: (tool) => set({ tool }),
   setImporting: (isImporting) => set({ isImporting }), setRestoring: (isRestoring) => set({ isRestoring }),
