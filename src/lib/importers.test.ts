@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPsdStructure, isSupportedImport } from './importers';
+import { buildPsdStructure, isSupportedImport, normalizePsdOrder } from './importers';
 
 describe('supported imports', () => {
   it.each([
@@ -35,5 +35,23 @@ describe('PSD structure', () => {
     expect(entries[3]?.parentId).toBe(entries[2]?.id);
     expect(entries[0]?.layer.hidden).toBe(true);
     expect(entries[0]?.layer.opened).toBe(false);
+  });
+
+  it('corrects bottom-first exports when the paper layer is first', () => {
+    const canvas = { width: 10, height: 10 } as OffscreenCanvas;
+    const normalized = normalizePsdOrder([
+      { name: '用紙', canvas },
+      { name: 'Folder', children: [{ name: 'Nested', children: [{ name: 'Deep bottom', canvas }, { name: 'Deep top', canvas }] }, { name: 'Top child', canvas }] },
+      { name: 'Top layer', canvas },
+    ]);
+    expect(normalized.map((layer) => layer.name)).toEqual(['Top layer', 'Folder', '用紙']);
+    expect(normalized[1]?.children?.map((layer) => layer.name)).toEqual(['Top child', 'Nested']);
+    expect(normalized[1]?.children?.[1]?.children?.map((layer) => layer.name)).toEqual(['Deep top', 'Deep bottom']);
+  });
+
+  it('leaves standard top-to-bottom PSD order unchanged', () => {
+    const canvas = { width: 10, height: 10 } as OffscreenCanvas;
+    const normalized = normalizePsdOrder([{ name: 'Top layer', canvas }, { name: 'Background', canvas }]);
+    expect(normalized.map((layer) => layer.name)).toEqual(['Top layer', 'Background']);
   });
 });
