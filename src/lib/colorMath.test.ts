@@ -14,6 +14,12 @@ describe('non-destructive color math', () => {
     expect(highlight.r).toBeGreaterThan(highlight.g);
     expect(highlight.b).toBeGreaterThan(highlight.g);
   });
+  it('keeps Pink × Cyan subtle across skin-like midtones', () => {
+    const source = { r: 184, g: 156, b: 150 };
+    const adjusted = adjustRgb(source, { ...defaultAdjustments(), ...lightingPresetAdjustments('pink-cyan') }, 1);
+    expect((adjusted.r - adjusted.g) - (source.r - source.g)).toBeLessThan(8);
+    expect(Math.abs(adjusted.g - source.g)).toBeLessThan(5);
+  });
   it('applies a directional key light more strongly on its facing side', () => {
     const data = new Uint8ClampedArray([150, 150, 150, 255, 150, 150, 150, 255]);
     const image = { data, width: 2, height: 1, colorSpace: 'srgb' } as ImageData;

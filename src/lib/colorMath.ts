@@ -48,13 +48,13 @@ function adjustRgbInternal(rgb: Rgb, a: LayerAdjustments, keyLightMask: number, 
   const tonalDelta = (a.shadows / 100 * 58 * (1 - normalizedLuminance) ** 2) + (a.highlights / 100 * 58 * normalizedLuminance ** 2);
   r += tonalDelta; g += tonalDelta; b += tonalDelta;
 
-  const balancePoint = clamp(.5 - a.lightingBalance / 250, .12, .88);
-  const shadowWeight = 1 - smoothstep(balancePoint - .22, balancePoint + .16, normalizedLuminance);
-  const highlightWeight = smoothstep(balancePoint - .18, balancePoint + .24, normalizedLuminance);
-  ({ r, g, b } = colorize({ r, g, b }, shadowColor, a.shadowTint / 100 * shadowWeight * .72));
-  ({ r, g, b } = colorize({ r, g, b }, highlightColor, a.highlightTint / 100 * highlightWeight * .78));
-  const directionalAmount = a.keyLightStrength / 100 * keyLightMask * (.28 + highlightWeight * .72);
-  ({ r, g, b } = colorize({ r, g, b }, highlightColor, directionalAmount * .72, .15));
+  const balancePoint = clamp(.58 - a.lightingBalance / 350, .32, .82);
+  const shadowWeight = 1 - smoothstep(balancePoint - .24, balancePoint + .02, normalizedLuminance);
+  const highlightWeight = smoothstep(balancePoint - .06, balancePoint + .26, normalizedLuminance);
+  ({ r, g, b } = colorize({ r, g, b }, shadowColor, a.shadowTint / 100 * shadowWeight * .45));
+  ({ r, g, b } = colorize({ r, g, b }, highlightColor, a.highlightTint / 100 * highlightWeight * .48));
+  const directionalAmount = a.keyLightStrength / 100 * keyLightMask * (.05 + highlightWeight * .95);
+  ({ r, g, b } = colorize({ r, g, b }, highlightColor, directionalAmount * .5, .08));
   return { r: clampByte(r), g: clampByte(g), b: clampByte(b) };
 }
 
