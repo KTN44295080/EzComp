@@ -9,6 +9,9 @@ export function adjustRgb(rgb: Rgb, a: LayerAdjustments): Rgb {
   r = luminance + (r - luminance) * saturation; g = luminance + (g - luminance) * saturation; b = luminance + (b - luminance) * saturation;
   const temperature = a.temperature / 100 * 34, tint = a.tint / 100 * 26;
   r += temperature - tint * 0.35; g += tint; b -= temperature + tint * 0.35;
+  const normalizedLuminance = Math.min(1, Math.max(0, (r * 0.2126 + g * 0.7152 + b * 0.0722) / 255));
+  const tonalDelta = (a.shadows / 100 * 58 * (1 - normalizedLuminance) ** 2) + (a.highlights / 100 * 58 * normalizedLuminance ** 2);
+  r += tonalDelta; g += tonalDelta; b += tonalDelta;
   return { r: clampByte(r), g: clampByte(g), b: clampByte(b) };
 }
 export function applyAdjustmentsToImageData(imageData: ImageData, adjustments: LayerAdjustments): ImageData {
@@ -21,5 +24,5 @@ export function applyAdjustmentsToImageData(imageData: ImageData, adjustments: L
   return imageData;
 }
 export function hasPixelAdjustments(a: LayerAdjustments): boolean {
-  return a.exposure !== 0 || a.contrast !== 0 || a.saturation !== 0 || a.temperature !== 0 || a.tint !== 0;
+  return a.exposure !== 0 || a.contrast !== 0 || a.saturation !== 0 || a.temperature !== 0 || a.tint !== 0 || a.shadows !== 0 || a.highlights !== 0;
 }

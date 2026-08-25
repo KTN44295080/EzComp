@@ -3,6 +3,7 @@ import { applyAdjustmentsToImageData, hasPixelAdjustments } from './colorMath';
 import type { CompositeDocument, RasterLayer } from '../types/editor';
 
 const rasterCache = new Map<string, { key: string; canvas: HTMLCanvasElement }>();
+const shadowCache = new Map<string, HTMLCanvasElement>();
 let checker: HTMLCanvasElement | undefined;
 const createCanvas = (w: number, h: number) => { const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(w)); canvas.height = Math.max(1, Math.round(h)); return canvas; };
 function adjustedRaster(layer: RasterLayer): CanvasImageSource | undefined {
@@ -18,7 +19,14 @@ function adjustedRaster(layer: RasterLayer): CanvasImageSource | undefined {
   if (blur) { const blurred = createCanvas(layer.width, layer.height), blurContext = blurred.getContext('2d'); if (blurContext) { blurContext.filter = `blur(${layer.adjustments.blur}px)`; blurContext.drawImage(working, 0, 0); result = blurred; } }
   rasterCache.set(layer.id, { key, canvas: result }); return result;
 }
-export function clearRasterCache(): void { rasterCache.clear(); }
+function shadowRaster(layer: RasterLayer): HTMLCanvasElement | undefined {
+  const cached = shadowCache.get(layer.assetId); if (cached) return cached;
+  const asset = getAsset(layer.assetId); if (!asset) return undefined;
+  const scale = Math.min(1, 1024 / Math.max(layer.width, layer.height)), canvas = createCanvas(layer.width * scale, layer.height * scale), context = canvas.getContext('2d'); if (!context) return undefined;
+  context.drawImage(asset.source, 0, 0, canvas.width, canvas.height); context.globalCompositeOperation = 'source-in'; context.fillStyle = '#000'; context.fillRect(0, 0, canvas.width, canvas.height);
+  shadowCache.set(layer.assetId, canvas); return canvas;
+}
+export function clearRasterCache(): void { rasterCache.clear(); shadowCache.clear(); }
 export function isLayerEffectivelyVisible(layer: RasterLayer, layers: RasterLayer[]): boolean {
   if (!layer.visible) return false;
   const byId = new Map(layers.map((candidate) => [candidate.id, candidate]));
@@ -39,6 +47,7 @@ export function drawComposition(context: CanvasRenderingContext2D, documentModel
   for (const layer of layers) {
     if (layer.kind === 'group' || !isLayerEffectivelyVisible(layer, layers) || layer.opacity <= 0) continue; const source = adjustedRaster(layer); if (!source) continue;
     const { transform } = layer, centerX = transform.x + layer.width * transform.scaleX / 2, centerY = transform.y + layer.height * transform.scaleY / 2;
+    if (layer.adjustments.shadowOpacity > 0) { const shadow = shadowRaster(layer); if (shadow) { context.save(); context.globalAlpha = layer.opacity / 100 * layer.adjustments.shadowOpacity / 100; context.globalCompositeOperation = 'source-over'; context.filter = `blur(${layer.adjustments.shadowBlur}px)`; context.translate(centerX + layer.adjustments.shadowOffsetX, centerY + layer.adjustments.shadowOffsetY); context.rotate(transform.rotation * Math.PI / 180); context.scale(transform.scaleX, transform.scaleY); context.drawImage(shadow, -layer.width / 2, -layer.height / 2, layer.width, layer.height); context.restore(); } }
     context.save(); context.globalAlpha = layer.opacity / 100; context.globalCompositeOperation = layer.blendMode; context.translate(centerX, centerY); context.rotate(transform.rotation * Math.PI / 180); context.scale(transform.scaleX, transform.scaleY); context.drawImage(source, -layer.width / 2, -layer.height / 2, layer.width, layer.height); context.restore();
   }
   context.restore();

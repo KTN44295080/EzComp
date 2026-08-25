@@ -28,7 +28,13 @@ export interface LayerAdjustments {
   saturation: number;
   temperature: number;
   tint: number;
+  shadows: number;
+  highlights: number;
   blur: number;
+  shadowOpacity: number;
+  shadowBlur: number;
+  shadowOffsetX: number;
+  shadowOffsetY: number;
 }
 
 export interface RasterLayer {
@@ -54,7 +60,9 @@ export interface RasterLayer {
 export interface ViewportState { zoom: number; panX: number; panY: number }
 
 export const defaultAdjustments = (): LayerAdjustments => ({
-  exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, blur: 0,
+  exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0,
+  shadows: 0, highlights: 0, blur: 0,
+  shadowOpacity: 0, shadowBlur: 18, shadowOffsetX: 0, shadowOffsetY: 14,
 });
 
 export const defaultDocument = (): CompositeDocument => ({

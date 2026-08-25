@@ -1,0 +1,25 @@
+import { LoaderCircle, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { autoCompositeLabels, autoCompositeLayer, autoCompositePresets, type AutoCompositePreset } from '../lib/autoComposite';
+import { useEditorStore } from '../store/editorStore';
+import { blendModes, type BlendMode } from '../types/editor';
+
+const blendLabels: Record<BlendMode, string> = { 'source-over': 'Normal', multiply: 'Multiply', screen: 'Screen', overlay: 'Overlay', 'soft-light': 'Soft Light', 'hard-light': 'Hard Light', 'color-dodge': 'Color Dodge', 'color-burn': 'Color Burn', darken: 'Darken', lighten: 'Lighten', difference: 'Difference', exclusion: 'Exclusion', hue: 'Hue', saturation: 'Saturation', color: 'Color', luminosity: 'Luminosity' };
+
+export function AutoCompositeControls({ compact = false }: { compact?: boolean }) {
+  const documentModel = useEditorStore((state) => state.document), layers = useEditorStore((state) => state.layers), selectedId = useEditorStore((state) => state.selectedLayerId), selected = layers.find((layer) => layer.id === selectedId);
+  const patchLayer = useEditorStore((state) => state.patchLayer), patchAdjustments = useEditorStore((state) => state.patchLayerAdjustments), setMessage = useEditorStore((state) => state.setMessage), setError = useEditorStore((state) => state.setError);
+  const [preset, setPreset] = useState<AutoCompositePreset>('balanced'), [referenceId, setReferenceId] = useState('below'), [busy, setBusy] = useState(false);
+  const referenceLayers = useMemo(() => layers.filter((layer) => layer.kind !== 'group' && layer.id !== selectedId), [layers, selectedId]);
+  useEffect(() => { if (referenceId !== 'below' && !referenceLayers.some((layer) => layer.id === referenceId)) setReferenceId('below'); }, [referenceId, referenceLayers]);
+  if (!selected || selected.kind === 'group' || !selectedId) return null;
+  const run = async () => {
+    setBusy(true); setError(null); setMessage(`Analyzing ${selected.name} against ${referenceId === 'below' ? 'the composite below' : 'the reference layer'}…`);
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    try { const adjustments = autoCompositeLayer(documentModel, layers, selected, preset, referenceId); patchAdjustments(selectedId, adjustments); setMessage(`${autoCompositeLabels[preset]} auto composite applied`); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Auto composite failed.'); setMessage('Auto composite could not be applied'); }
+    finally { setBusy(false); }
+  };
+  if (compact) return <div className="quick-composite"><label><span>Blend</span><select value={selected.blendMode} onChange={(event) => patchLayer(selectedId, { blendMode: event.currentTarget.value as BlendMode })}>{blendModes.map((mode) => <option key={mode} value={mode}>{blendLabels[mode]}</option>)}</select></label><div className="quick-composite__auto"><select aria-label="Auto composite preset" value={preset} onChange={(event) => setPreset(event.currentTarget.value as AutoCompositePreset)}>{autoCompositePresets.map((value) => <option key={value} value={value}>{autoCompositeLabels[value]}</option>)}</select><button type="button" disabled={busy} onClick={() => void run()}>{busy ? <LoaderCircle className="spin" size={13}/> : <Sparkles size={13}/>}Auto</button></div></div>;
+  return <section className="inspector-section auto-composite"><div className="section-title-row"><h3>Auto Composite</h3><Sparkles size={14}/></div><label className="select-field"><span>Match against</span><select value={referenceId} onChange={(event) => setReferenceId(event.currentTarget.value)}><option value="below">Composite below selected layer</option>{referenceLayers.map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}</select></label><div className="preset-grid">{autoCompositePresets.map((value) => <button className={preset === value ? 'is-active' : ''} type="button" key={value} onClick={() => setPreset(value)}>{autoCompositeLabels[value]}</button>)}</div><button className="auto-composite__run" type="button" disabled={busy} onClick={() => void run()}>{busy ? <LoaderCircle className="spin" size={15}/> : <Sparkles size={15}/>}Analyze & match</button><p className="inspector-note">Analyzes visible pixels locally, then stores editable correction and shadow values. Original pixels are never regenerated.</p></section>;
+}

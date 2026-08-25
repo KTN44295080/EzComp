@@ -9,6 +9,9 @@ EzComp is a local-first web compositor for matching existing image assets withou
 - Layer reordering, duplication, visibility, locking, selection, and deletion
 - Canvas move, uniform scale handles, rotation handle, pan, zoom, and fit
 - Exposure, contrast, saturation, temperature, tint, blur, opacity, and blend mode
+- Browser-local auto compositing against the layers below or a chosen reference layer
+- Balanced, Cinematic, Soft, Night, and Vivid matching presets
+- Editable shadow/highlight matching and non-destructive integration shadows
 - Per-adjustment reset, color reset, transform reset, and all-layer-value reset
 - Undo/redo with pointer interactions grouped into a single history step
 - Before/After adjustment comparison
@@ -17,7 +20,7 @@ EzComp is a local-first web compositor for matching existing image assets withou
 - Full-resolution PNG export
 - Loading, error, autosave, drop, and empty states
 
-Images are processed in the browser. EzComp has no image upload endpoint, D1 database, R2 bucket, or generative-image feature.
+Images are processed in the browser. Auto Composite analyzes downscaled local pixels to derive editable correction values; it does not upload or regenerate the artwork. EzComp has no image upload endpoint, D1 database, R2 bucket, or generative-image feature.
 
 ## Keyboard and pointer controls
 

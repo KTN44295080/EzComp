@@ -1,5 +1,5 @@
 import { assetToBlob, clearAssets, restoreAsset } from './assets';
-import type { CompositeDocument, RasterLayer } from '../types/editor';
+import { defaultAdjustments, type CompositeDocument, type RasterLayer } from '../types/editor';
 
 export const PROJECT_EXTENSION = '.ezcomp';
 const DB_NAME = 'ezcomp-local';
@@ -30,7 +30,7 @@ async function hydrate(project: StoredProject): Promise<ProjectSnapshot> {
   if (project.version !== 1 || !project.document || !Array.isArray(project.layers)) throw new Error('Unsupported EzComp project.');
   clearAssets();
   await Promise.all(Object.entries(project.assets).map(([id, blob]) => restoreAsset(id, blob)));
-  return { document: project.document, layers: project.layers.map((layer) => ({ ...layer, kind: layer.kind ?? 'raster', depth: layer.depth ?? 0 })) };
+  return { document: project.document, layers: project.layers.map((layer) => ({ ...layer, kind: layer.kind ?? 'raster', depth: layer.depth ?? 0, adjustments: { ...defaultAdjustments(), ...layer.adjustments } })) };
 }
 
 export async function saveAutosave(snapshot: ProjectSnapshot): Promise<void> {
