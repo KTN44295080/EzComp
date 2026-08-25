@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveAutoAdjustments, type ImageStats } from './autoComposite';
+import { deriveAutoAdjustments, imageStats, type ImageStats } from './autoComposite';
 
 const stats = (patch: Partial<ImageStats> = {}): ImageStats => ({ luminance: .5, contrast: .2, saturation: .3, warmth: 0, tint: 0, low: .2, high: .8, pixels: 1000, ...patch });
 
@@ -22,5 +22,16 @@ describe('auto composite adjustment model', () => {
     expect(result.exposure).toBeLessThanOrEqual(2.5);
     expect(Math.abs(result.contrast)).toBeLessThanOrEqual(55);
     expect(Math.abs(result.temperature)).toBeLessThanOrEqual(70);
+  });
+
+  it('estimates illuminant color mostly from neutral pixels instead of saturated costume color', () => {
+    const data = new Uint8ClampedArray([
+      255, 0, 0, 255,
+      128, 128, 128, 255,
+      150, 150, 150, 255,
+    ]);
+    const result = imageStats({ data, width: 3, height: 1, colorSpace: 'srgb' } as ImageData);
+    expect(Math.abs(result.warmth)).toBeLessThan(.08);
+    expect(Math.abs(result.tint)).toBeLessThan(.08);
   });
 });
