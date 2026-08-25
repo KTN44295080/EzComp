@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveAutoAdjustments, imageStats, type ImageStats } from './autoComposite';
+import { deriveAutoAdjustments, imageStats, pickSharedMatchAdjustments, type ImageStats } from './autoComposite';
 
 const stats = (patch: Partial<ImageStats> = {}): ImageStats => ({ luminance: .5, contrast: .2, saturation: .3, warmth: 0, tint: 0, low: .2, high: .8, pixels: 1000, ...patch });
 
@@ -33,5 +33,16 @@ describe('auto composite adjustment model', () => {
     const result = imageStats({ data, width: 3, height: 1, colorSpace: 'srgb' } as ImageData);
     expect(Math.abs(result.warmth)).toBeLessThan(.08);
     expect(Math.abs(result.tint)).toBeLessThan(.08);
+  });
+
+  it('reuses one shared scene grade instead of adapting the same preset per character', () => {
+    const reference = stats({ luminance: .38, warmth: -.08 });
+    const first = deriveAutoAdjustments(stats({ luminance: .25, contrast: .12 }), reference, 'balanced');
+    const adaptiveSecond = { ...deriveAutoAdjustments(stats({ luminance: .7, contrast: .3 }), reference, 'balanced'), shadowBlur: 42 };
+    const lockedSecond = { ...adaptiveSecond, ...pickSharedMatchAdjustments(first) };
+    expect(adaptiveSecond.exposure).not.toBe(first.exposure);
+    expect(lockedSecond.exposure).toBe(first.exposure);
+    expect(lockedSecond.temperature).toBe(first.temperature);
+    expect(lockedSecond.shadowBlur).toBe(adaptiveSecond.shadowBlur);
   });
 });

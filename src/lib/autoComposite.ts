@@ -6,6 +6,11 @@ export const autoCompositePresets = ['balanced', 'cinematic', 'soft', 'night', '
 export type AutoCompositePreset = (typeof autoCompositePresets)[number];
 export type AutoCompositeScope = 'scene' | 'local';
 export const autoCompositeLabels: Record<AutoCompositePreset, string> = { balanced: 'Balanced', cinematic: 'Cinematic', soft: 'Soft', night: 'Night', vivid: 'Vivid' };
+const sharedMatchKeys = ['exposure', 'contrast', 'saturation', 'temperature', 'tint', 'shadows', 'highlights', 'blur'] as const;
+
+export function pickSharedMatchAdjustments(adjustments: LayerAdjustments): Partial<LayerAdjustments> {
+  return Object.fromEntries(sharedMatchKeys.map((key) => [key, adjustments[key]])) as Partial<LayerAdjustments>;
+}
 
 export interface ImageStats {
   luminance: number;

@@ -12,6 +12,7 @@ export interface CompositeDocument {
   width: number;
   height: number;
   background: 'transparent' | 'black' | 'white';
+  sceneLock: SceneLock;
 }
 
 export interface LayerTransform {
@@ -43,6 +44,16 @@ export interface LayerAdjustments {
   keyLightStrength: number;
   keyLightAngle: number;
   keyLightSoftness: number;
+}
+
+export interface SceneLock {
+  enabled: boolean;
+  preset: string | null;
+  referenceId: string | null;
+  scope: 'scene' | 'local' | null;
+  sourceLayerId: string | null;
+  sourceLayerName: string | null;
+  adjustments: Partial<LayerAdjustments> | null;
 }
 
 export type NumericLayerAdjustmentKey = { [Key in keyof LayerAdjustments]: LayerAdjustments[Key] extends number ? Key : never }[keyof LayerAdjustments];
@@ -78,8 +89,13 @@ export const defaultAdjustments = (): LayerAdjustments => ({
   keyLightStrength: 0, keyLightAngle: 315, keyLightSoftness: 70,
 });
 
+export const defaultSceneLock = (): SceneLock => ({
+  enabled: true, preset: null, referenceId: null, scope: null,
+  sourceLayerId: null, sourceLayerName: null, adjustments: null,
+});
+
 export const defaultDocument = (): CompositeDocument => ({
-  name: 'Untitled', width: 1920, height: 1080, background: 'transparent',
+  name: 'Untitled', width: 1920, height: 1080, background: 'transparent', sceneLock: defaultSceneLock(),
 });
 
 export const defaultTransform = (): LayerTransform => ({

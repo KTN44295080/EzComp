@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { defaultAdjustments, defaultDocument, type CompositeDocument, type EditorTool, type LayerAdjustments, type LayerTransform, type RasterLayer, type ViewportState } from '../types/editor';
+import { defaultAdjustments, defaultDocument, defaultSceneLock, type CompositeDocument, type EditorTool, type LayerAdjustments, type LayerTransform, type RasterLayer, type SceneLock, type ViewportState } from '../types/editor';
 import { makeId } from '../lib/id';
 
 interface HistorySnapshot { document: CompositeDocument; layers: RasterLayer[]; selectedLayerId: string | null }
@@ -9,6 +9,7 @@ interface EditorState {
   compareBefore: boolean; message: string; error: string | null;
   past: HistorySnapshot[]; future: HistorySnapshot[]; transactionBase: HistorySnapshot | null;
   setDocument: (patch: Partial<CompositeDocument>) => void;
+  setSceneLock: (patch: Partial<SceneLock>) => void;
   replaceProject: (document: CompositeDocument, layers: RasterLayer[], record?: boolean) => void;
   appendLayers: (layers: RasterLayer[]) => void; selectLayer: (id: string | null) => void;
   patchLayer: (id: string, patch: Partial<RasterLayer>) => void;
@@ -42,8 +43,9 @@ export const useEditorStore = create<EditorState>((set) => ({
   isImporting: false, isRestoring: true, compareBefore: false, message: 'Ready', error: null,
   past: [], future: [], transactionBase: null,
   setDocument: (patch) => set((state) => withHistory(state, { document: { ...state.document, ...patch } })),
+  setSceneLock: (patch) => set((state) => ({ document: { ...state.document, sceneLock: { ...defaultSceneLock(), ...state.document.sceneLock, ...patch } } })),
   replaceProject: (document, layers, record = true) => set((state) => ({
-    ...(record ? withHistory(state, {}) : { past: [], future: [] }), document, layers,
+    ...(record ? withHistory(state, {}) : { past: [], future: [] }), document: { ...defaultDocument(), ...document, sceneLock: { ...defaultSceneLock(), ...document.sceneLock } }, layers,
     selectedLayerId: topRasterId(layers), viewport: initialViewport(), message: `${rasterCount(layers)} layer${rasterCount(layers) === 1 ? '' : 's'} loaded`, error: null,
   })),
   appendLayers: (layers) => set((state) => withHistory(state, { layers: [...state.layers, ...layers], selectedLayerId: topRasterId(layers) ?? state.selectedLayerId, message: `${rasterCount(layers)} layer${rasterCount(layers) === 1 ? '' : 's'} imported` })),
