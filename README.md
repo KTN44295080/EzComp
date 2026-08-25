@@ -1,56 +1,49 @@
 # EzComp
 
-EzComp is a local-first web compositor for matching existing image assets without regenerating them. It is aimed at fast background/character compositing, PSD inspection, and non-destructive color correction in a browser.
+EzComp is a local-first web compositor for matching existing image assets without regenerating them. Imported pixels remain authoritative; transforms and color corrections are stored as non-destructive parameters and evaluated in Canvas 2D at preview/export time.
 
-## Current MVP
+## Features
 
-- Import PSD, PNG, JPEG, and WebP files
-- Preserve readable PSD raster layers, names, hierarchy paths, visibility, opacity, position, and common blend modes
-- Reorder, duplicate, hide, remove, and select layers
-- Move layers directly on the canvas or edit numeric transforms
-- Adjust exposure, contrast, saturation, temperature, tint, blur, opacity, and blend mode
-- Pan, zoom, fit to view, paste images, and drag-and-drop files
-- Export the full-resolution composition as a PNG
-- Keep all image processing in the browser; there is no upload endpoint
+- PSD, PNG, JPEG, and WebP import
+- PSD raster layer names, hierarchy paths, visibility, opacity, position, and common blend modes
+- Layer reordering, duplication, visibility, locking, selection, and deletion
+- Canvas move, uniform scale handles, rotation handle, pan, zoom, and fit
+- Exposure, contrast, saturation, temperature, tint, blur, opacity, and blend mode
+- Per-adjustment reset, color reset, transform reset, and all-layer-value reset
+- Undo/redo with pointer interactions grouped into a single history step
+- Before/After adjustment comparison
+- Local `.ezcomp` project download and load, including raster pixels
+- IndexedDB autosave and startup restore
+- Full-resolution PNG export
+- Loading, error, autosave, drop, and empty states
 
-## Principles
-
-1. **Existing pixels remain authoritative.** EzComp does not redraw or regenerate imported artwork.
-2. **Edits are non-destructive.** Layer transforms and color adjustments are stored as parameters and evaluated for preview/export.
-3. **Local by default.** Imported image data stays in browser memory.
-4. **Desktop-first.** The initial UI targets mouse/keyboard compositing workflows.
-
-## Development
-
-Requirements: Node.js 22.12 or newer.
-
-```bash
-npm install
-npm run dev
-```
-
-Verification:
-
-```bash
-npm test
-npm run build
-```
+Images are processed in the browser. EzComp has no image upload endpoint, D1 database, R2 bucket, or generative-image feature.
 
 ## Keyboard and pointer controls
 
-- `V`: move tool
-- `H`: hand tool
-- Hold `Space`: temporary hand tool
-- Mouse wheel: zoom around cursor
-- Middle mouse drag: pan
-- Arrow keys: nudge selected layer by 1 px
-- `Shift` + arrow keys: nudge by 10 px
-- `Delete` / `Backspace`: remove selected layer
-- `0`: fit composition to viewport
-- Paste an image from the clipboard to add it as a layer
+- `Ctrl/Cmd + Z`: Undo
+- `Ctrl/Cmd + Shift + Z` or `Ctrl/Cmd + Y`: Redo
+- `Ctrl/Cmd + S`: Save `.ezcomp` project
+- `Ctrl/Cmd + O`: Open `.ezcomp` project
+- `Ctrl/Cmd + D`: Duplicate selected layer
+- `V`: Move tool
+- `H`: Hand tool
+- `B`: Toggle Before/After
+- Hold `Space`: Temporary hand tool
+- Mouse wheel: Zoom around cursor
+- Middle mouse drag: Pan
+- Arrow keys: Nudge by 1 px
+- `Shift + Arrow`: Nudge by 10 px
+- `Delete` / `Backspace`: Delete selected layer
+- `0`: Fit composition to viewport
+- Paste or drag supported raster images to import
 
-## PSD support and current limitations
+## Verification
 
-PSD parsing is provided by `ag-psd`. EzComp currently imports rasterized layer canvases and falls back to the PSD composite image when individual raster data is unavailable. Unsupported Photoshop features are not emulated. The initial renderer uses Canvas 2D and sRGB browser preview; color-managed wide-gamut workflows, masks, adjustment layers, smart objects, 16-bit channels, PSB, WebGPU rendering, and project persistence are roadmap items.
+```bash
+npm test
+npm run typecheck
+npm run build
+```
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for implementation boundaries and the next milestones.
+PSD support uses `ag-psd`. Unsupported Photoshop features are not emulated; readable raster layers are imported and the composite image is used as fallback. Masks, adjustment layers, smart objects, 16-bit channels, PSB, and full color-managed wide-gamut workflows remain outside the current scope.

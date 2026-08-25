@@ -1,32 +1,46 @@
 {
   "name": "ezcomp",
-  "private": true,
   "version": "0.1.0",
-  "type": "module",
-  "description": "A local-first, non-generative web compositor for matching existing image assets.",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "install:ci": "bash scripts/install-ci.sh",
+    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
+    "build": "bash scripts/build-verified.sh",
+    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "preview": "vite preview"
+    "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
     "ag-psd": "^30.2.0",
-    "lucide-react": "^1.34.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "lucide-react": "^0.468.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.1.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.2.2",
-    "vitest": "^4.1.11"
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@tailwindcss/postcss": "4.2.1",
+    "@cloudflare/workers-types": "4.20260702.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vitest": "^4.0.18",
+    "vinext": "0.0.50",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
   },
-  "engines": {
-    "node": ">=22.12.0"
-  }
+  "type": "module",
+  "displayName": "EzComp"
 }
