@@ -1,5 +1,5 @@
 import { getAsset } from './assets';
-import { drawComposition } from './renderer';
+import { drawComposition, isLayerEffectivelyVisible } from './renderer';
 import { defaultAdjustments, type CompositeDocument, type LayerAdjustments, type RasterLayer } from '../types/editor';
 
 export const autoCompositePresets = ['balanced', 'cinematic', 'soft', 'night', 'vivid'] as const;
@@ -79,7 +79,9 @@ function statsForLayer(layer: RasterLayer): ImageStats {
 
 function referenceStats(documentModel: CompositeDocument, layers: RasterLayer[], selected: RasterLayer, referenceId: string, scope: AutoCompositeScope): ImageStats {
   const selectedIndex = layers.findIndex((layer) => layer.id === selected.id);
-  const allowed = new Set(referenceId === 'below' ? layers.slice(0, selectedIndex).filter((layer) => layer.kind !== 'group').map((layer) => layer.id) : [referenceId]);
+  const below = layers.slice(0, selectedIndex).filter((layer) => layer.kind !== 'group');
+  const backdrop = below.find((layer) => isLayerEffectivelyVisible(layer, layers) && layer.opacity > 0) ?? below[0];
+  const allowed = new Set(referenceId === 'below' ? below.map((layer) => layer.id) : referenceId === 'backdrop' ? backdrop ? [backdrop.id] : [] : [referenceId]);
   const referenceLayers = layers.filter((layer) => layer.kind === 'group' || allowed.has(layer.id));
   if (!referenceLayers.some((layer) => layer.kind !== 'group')) throw new Error('Place a visible background below this layer or choose a reference layer.');
   const { canvas, scale } = scaledCanvas(documentModel.width, documentModel.height), context = canvas.getContext('2d', { willReadFrequently: true }); if (!context) throw new Error('Canvas analysis is unavailable.');
@@ -93,7 +95,7 @@ function referenceStats(documentModel: CompositeDocument, layers: RasterLayer[],
   return scene;
 }
 
-export function autoCompositeLayer(documentModel: CompositeDocument, layers: RasterLayer[], selected: RasterLayer, preset: AutoCompositePreset, referenceId = 'below', scope: AutoCompositeScope = 'scene'): LayerAdjustments {
+export function autoCompositeLayer(documentModel: CompositeDocument, layers: RasterLayer[], selected: RasterLayer, preset: AutoCompositePreset, referenceId = 'backdrop', scope: AutoCompositeScope = 'scene'): LayerAdjustments {
   if (selected.kind === 'group') throw new Error('Choose a raster layer to auto composite.');
   const adjustments = deriveAutoAdjustments(statsForLayer(selected), referenceStats(documentModel, layers, selected, referenceId, scope), preset);
   const subjectSize = Math.max(1, Math.min(selected.width * Math.abs(selected.transform.scaleX), selected.height * Math.abs(selected.transform.scaleY)));
