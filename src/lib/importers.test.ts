@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSupportedImport } from './importers';
+import { buildPsdStructure, isSupportedImport } from './importers';
 
 describe('supported imports', () => {
   it.each([
@@ -11,4 +11,29 @@ describe('supported imports', () => {
     ['animation.gif', 'image/gif'], ['vector.svg', 'image/svg+xml'],
     ['renamed.png', 'image/jpeg'], ['notes.txt', 'text/plain'],
   ])('rejects %s', (name, type) => expect(isSupportedImport({ name, type })).toBe(false));
+});
+
+describe('PSD structure', () => {
+  it('keeps Photoshop top-to-bottom order and nested groups', () => {
+    const canvas = { width: 10, height: 10 } as OffscreenCanvas;
+    const entries = buildPsdStructure([
+      { name: 'Hidden folder', hidden: true, opened: false, children: [
+        { name: 'Top child', canvas },
+        { name: 'Nested', children: [{ name: 'Deep child', canvas }] },
+      ] },
+      { name: 'Bottom layer', canvas },
+    ]);
+    expect(entries.map((entry) => [entry.kind, entry.path.at(-1), entry.depth])).toEqual([
+      ['group', 'Hidden folder', 0],
+      ['raster', 'Top child', 1],
+      ['group', 'Nested', 1],
+      ['raster', 'Deep child', 2],
+      ['raster', 'Bottom layer', 0],
+    ]);
+    expect(entries[1]?.parentId).toBe(entries[0]?.id);
+    expect(entries[2]?.parentId).toBe(entries[0]?.id);
+    expect(entries[3]?.parentId).toBe(entries[2]?.id);
+    expect(entries[0]?.layer.hidden).toBe(true);
+    expect(entries[0]?.layer.opened).toBe(false);
+  });
 });

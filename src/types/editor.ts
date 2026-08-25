@@ -34,6 +34,10 @@ export interface LayerAdjustments {
 export interface RasterLayer {
   id: string;
   assetId: string;
+  kind?: 'raster' | 'group';
+  parentId?: string;
+  depth?: number;
+  expanded?: boolean;
   name: string;
   sourcePath?: string;
   width: number;

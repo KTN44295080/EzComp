@@ -34,6 +34,8 @@ const withHistory = (state: EditorState, patch: Partial<EditorState>): Partial<E
   past: state.transactionBase ? state.past : [...state.past.slice(-79), snapshot(state)],
   future: [],
 });
+const topRasterId = (layers: RasterLayer[]): string | null => [...layers].reverse().find((layer) => layer.kind !== 'group')?.id ?? null;
+const rasterCount = (layers: RasterLayer[]): number => layers.filter((layer) => layer.kind !== 'group').length;
 
 export const useEditorStore = create<EditorState>((set) => ({
   document: defaultDocument(), layers: [], selectedLayerId: null, viewport: initialViewport(), tool: 'move',
@@ -42,18 +44,18 @@ export const useEditorStore = create<EditorState>((set) => ({
   setDocument: (patch) => set((state) => withHistory(state, { document: { ...state.document, ...patch } })),
   replaceProject: (document, layers, record = true) => set((state) => ({
     ...(record ? withHistory(state, {}) : { past: [], future: [] }), document, layers,
-    selectedLayerId: layers.at(-1)?.id ?? null, viewport: initialViewport(), message: `${layers.length} layer${layers.length === 1 ? '' : 's'} loaded`, error: null,
+    selectedLayerId: topRasterId(layers), viewport: initialViewport(), message: `${rasterCount(layers)} layer${rasterCount(layers) === 1 ? '' : 's'} loaded`, error: null,
   })),
-  appendLayers: (layers) => set((state) => withHistory(state, { layers: [...state.layers, ...layers], selectedLayerId: layers.at(-1)?.id ?? state.selectedLayerId, message: `${layers.length} layer${layers.length === 1 ? '' : 's'} imported` })),
+  appendLayers: (layers) => set((state) => withHistory(state, { layers: [...state.layers, ...layers], selectedLayerId: topRasterId(layers) ?? state.selectedLayerId, message: `${rasterCount(layers)} layer${rasterCount(layers) === 1 ? '' : 's'} imported` })),
   selectLayer: (id) => set({ selectedLayerId: id }),
   patchLayer: (id, patch) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, ...patch } : layer) })),
   patchLayerTransform: (id, patch) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, transform: { ...layer.transform, ...patch } } : layer) })),
   patchLayerAdjustments: (id, patch) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, adjustments: { ...layer.adjustments, ...patch } } : layer) })),
   resetAdjustment: (id, key) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, adjustments: { ...layer.adjustments, [key]: defaultAdjustments()[key] } } : layer) })),
   resetLayerValues: (id) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, opacity: 100, blendMode: 'source-over', transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }, adjustments: defaultAdjustments() } : layer), message: 'Layer values reset' })),
-  removeLayer: (id) => set((state) => { const next = state.layers.filter((l) => l.id !== id); return withHistory(state, { layers: next, selectedLayerId: state.selectedLayerId === id ? next.at(-1)?.id ?? null : state.selectedLayerId, message: 'Layer removed' }); }),
-  duplicateLayer: (id) => set((state) => { const index = state.layers.findIndex((l) => l.id === id); const source = state.layers[index]; if (!source) return state; const copy = { ...structuredClone(source), id: makeId(), name: `${source.name} copy`, transform: { ...source.transform, x: source.transform.x + 20, y: source.transform.y + 20 } }; const layers = [...state.layers]; layers.splice(index + 1, 0, copy); return withHistory(state, { layers, selectedLayerId: copy.id, message: 'Layer duplicated' }); }),
-  moveLayer: (id, direction) => set((state) => { const from = state.layers.findIndex((l) => l.id === id); const to = direction === 'up' ? from + 1 : from - 1; if (from < 0 || to < 0 || to >= state.layers.length) return state; const layers = [...state.layers]; const [layer] = layers.splice(from, 1); if (!layer) return state; layers.splice(to, 0, layer); return withHistory(state, { layers }); }),
+  removeLayer: (id) => set((state) => { const removed = new Set([id]); let changed = true; while (changed) { changed = false; for (const layer of state.layers) if (layer.parentId && removed.has(layer.parentId) && !removed.has(layer.id)) { removed.add(layer.id); changed = true; } } const next = state.layers.filter((layer) => !removed.has(layer.id)); return withHistory(state, { layers: next, selectedLayerId: state.selectedLayerId && removed.has(state.selectedLayerId) ? topRasterId(next) : state.selectedLayerId, message: removed.size > 1 ? 'Group and contents removed' : 'Layer removed' }); }),
+  duplicateLayer: (id) => set((state) => { const index = state.layers.findIndex((l) => l.id === id); const source = state.layers[index]; if (!source || source.kind === 'group' || source.parentId) return state; const copy = { ...structuredClone(source), id: makeId(), name: `${source.name} copy`, transform: { ...source.transform, x: source.transform.x + 20, y: source.transform.y + 20 } }; const layers = [...state.layers]; layers.splice(index + 1, 0, copy); return withHistory(state, { layers, selectedLayerId: copy.id, message: 'Layer duplicated' }); }),
+  moveLayer: (id, direction) => set((state) => { const from = state.layers.findIndex((l) => l.id === id), current = state.layers[from]; if (!current || current.kind === 'group' || current.parentId) return state; const to = direction === 'up' ? from + 1 : from - 1; if (to < 0 || to >= state.layers.length || state.layers[to]?.kind === 'group' || state.layers[to]?.parentId) return state; const layers = [...state.layers]; const [layer] = layers.splice(from, 1); if (!layer) return state; layers.splice(to, 0, layer); return withHistory(state, { layers }); }),
   setViewport: (patch) => set((state) => ({ viewport: { ...state.viewport, ...patch } })), setTool: (tool) => set({ tool }),
   setImporting: (isImporting) => set({ isImporting }), setRestoring: (isRestoring) => set({ isRestoring }),
   setCompareBefore: (compareBefore) => set({ compareBefore }), setMessage: (message) => set({ message }), setError: (error) => set({ error }),

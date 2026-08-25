@@ -22,7 +22,7 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 async function capture(snapshot: ProjectSnapshot): Promise<StoredProject> {
-  const entries = await Promise.all(snapshot.layers.map(async (layer) => [layer.assetId, await assetToBlob(layer.assetId)] as const));
+  const entries = await Promise.all(snapshot.layers.filter((layer) => layer.kind !== 'group' && layer.assetId).map(async (layer) => [layer.assetId, await assetToBlob(layer.assetId)] as const));
   return { version: 1, document: snapshot.document, layers: snapshot.layers, assets: Object.fromEntries(entries) };
 }
 
@@ -30,7 +30,7 @@ async function hydrate(project: StoredProject): Promise<ProjectSnapshot> {
   if (project.version !== 1 || !project.document || !Array.isArray(project.layers)) throw new Error('Unsupported EzComp project.');
   clearAssets();
   await Promise.all(Object.entries(project.assets).map(([id, blob]) => restoreAsset(id, blob)));
-  return { document: project.document, layers: project.layers };
+  return { document: project.document, layers: project.layers.map((layer) => ({ ...layer, kind: layer.kind ?? 'raster', depth: layer.depth ?? 0 })) };
 }
 
 export async function saveAutosave(snapshot: ProjectSnapshot): Promise<void> {

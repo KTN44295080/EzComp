@@ -19,11 +19,25 @@ function adjustedRaster(layer: RasterLayer): CanvasImageSource | undefined {
   rasterCache.set(layer.id, { key, canvas: result }); return result;
 }
 export function clearRasterCache(): void { rasterCache.clear(); }
+export function isLayerEffectivelyVisible(layer: RasterLayer, layers: RasterLayer[]): boolean {
+  if (!layer.visible) return false;
+  const byId = new Map(layers.map((candidate) => [candidate.id, candidate]));
+  const visited = new Set<string>();
+  let parentId = layer.parentId;
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    const parent = byId.get(parentId);
+    if (!parent) break;
+    if (!parent.visible) return false;
+    parentId = parent.parentId;
+  }
+  return true;
+}
 export function drawComposition(context: CanvasRenderingContext2D, documentModel: CompositeDocument, layers: RasterLayer[]): void {
   if (documentModel.background !== 'transparent') { context.save(); context.fillStyle = documentModel.background; context.fillRect(0, 0, documentModel.width, documentModel.height); context.restore(); }
   context.save(); context.beginPath(); context.rect(0, 0, documentModel.width, documentModel.height); context.clip();
   for (const layer of layers) {
-    if (!layer.visible || layer.opacity <= 0) continue; const source = adjustedRaster(layer); if (!source) continue;
+    if (layer.kind === 'group' || !isLayerEffectivelyVisible(layer, layers) || layer.opacity <= 0) continue; const source = adjustedRaster(layer); if (!source) continue;
     const { transform } = layer, centerX = transform.x + layer.width * transform.scaleX / 2, centerY = transform.y + layer.height * transform.scaleY / 2;
     context.save(); context.globalAlpha = layer.opacity / 100; context.globalCompositeOperation = layer.blendMode; context.translate(centerX, centerY); context.rotate(transform.rotation * Math.PI / 180); context.scale(transform.scaleX, transform.scaleY); context.drawImage(source, -layer.width / 2, -layer.height / 2, layer.width, layer.height); context.restore();
   }
