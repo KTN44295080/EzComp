@@ -20,6 +20,11 @@ describe('non-destructive color math', () => {
     expect((adjusted.r - adjusted.g) - (source.r - source.g)).toBeLessThan(8);
     expect(Math.abs(adjusted.g - source.g)).toBeLessThan(5);
   });
+  it('makes Pink × Cyan visible on bright surfaces at its default strength', () => {
+    const adjusted = adjustRgb({ r: 220, g: 220, b: 220 }, { ...defaultAdjustments(), ...lightingPresetAdjustments('pink-cyan') }, 1);
+    expect(adjusted.r - adjusted.g).toBeGreaterThan(18);
+    expect(adjusted.b).toBeGreaterThan(adjusted.g);
+  });
   it('applies a directional key light more strongly on its facing side', () => {
     const data = new Uint8ClampedArray([150, 150, 150, 255, 150, 150, 150, 255]);
     const image = { data, width: 2, height: 1, colorSpace: 'srgb' } as ImageData;
