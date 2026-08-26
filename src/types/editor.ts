@@ -12,9 +12,12 @@ export interface CompositeDocument {
   width: number;
   height: number;
   background: 'transparent' | 'black' | 'white';
+  contentTransform: ContentTransform;
   sceneLock: SceneLock;
   finish: CompositeFinish;
 }
+
+export interface ContentTransform { scale: number; x: number; y: number }
 
 export interface CompositeFinish {
   diffusion: number;
@@ -148,6 +151,8 @@ export const defaultFinish = (): CompositeFinish => ({
   diffusion: 0, diffusionRadius: 24, bloom: 0, bloomRadius: 36, vignette: 0, grain: 0,
 });
 
+export const defaultContentTransform = (): ContentTransform => ({ scale: 1, x: 0, y: 0 });
+
 export const mvFinish = (): CompositeFinish => ({
   diffusion: 18, diffusionRadius: 24, bloom: 9, bloomRadius: 36, vignette: 6, grain: 7,
 });
@@ -158,7 +163,7 @@ export const defaultDepthOfField = (): DepthOfFieldSettings => ({
 });
 
 export const defaultDocument = (): CompositeDocument => ({
-  name: 'Untitled', width: 1920, height: 1080, background: 'transparent', sceneLock: defaultSceneLock(), finish: defaultFinish(),
+  name: 'Untitled', width: 1920, height: 1080, background: 'transparent', contentTransform: defaultContentTransform(), sceneLock: defaultSceneLock(), finish: defaultFinish(),
 });
 
 export const defaultTransform = (): LayerTransform => ({
