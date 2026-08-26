@@ -8,7 +8,9 @@ describe('auto composite adjustment model', () => {
     const result = deriveAutoAdjustments(stats({ luminance: .2, low: .08, high: .45 }), stats({ luminance: .55 }), 'balanced');
     expect(result.exposure).toBeGreaterThan(0);
     expect(result.shadowOpacity).toBeGreaterThan(0);
+    expect(result.shadowProjection).toBeGreaterThan(0);
     expect(result.lightWrap).toBeGreaterThan(0);
+    expect(result.occlusionOpacity).toBeGreaterThan(0);
     expect(result.grain).toBeGreaterThan(0);
   });
 

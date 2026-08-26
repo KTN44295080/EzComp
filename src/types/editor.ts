@@ -22,6 +22,7 @@ export interface CompositeFinish {
   bloom: number;
   bloomRadius: number;
   vignette: number;
+  grain: number;
 }
 
 export interface DepthOfFieldSettings {
@@ -63,11 +64,18 @@ export interface LayerAdjustments {
   keyLightStrength: number;
   keyLightAngle: number;
   keyLightSoftness: number;
+  upperBodyLight: number;
+  rimLight: number;
   environmentColor: string;
   lightWrap: number;
   lightWrapRadius: number;
+  occlusionOpacity: number;
+  occlusionDepth: number;
+  occlusionSoftness: number;
   atmosphere: number;
   grain: number;
+  shadowProjection: number;
+  shadowLength: number;
 }
 
 export interface SceneLock {
@@ -112,8 +120,11 @@ export const defaultAdjustments = (): LayerAdjustments => ({
   highlightColor: '#ff91c8', highlightTint: 0,
   shadowColor: '#65b9ff', shadowTint: 0, lightingBalance: 0,
   keyLightStrength: 0, keyLightAngle: 315, keyLightSoftness: 70,
+  upperBodyLight: 0, rimLight: 0,
   environmentColor: '#8aa9c8', lightWrap: 0, lightWrapRadius: 12,
+  occlusionOpacity: 0, occlusionDepth: 55, occlusionSoftness: 18,
   atmosphere: 0, grain: 0,
+  shadowProjection: 0, shadowLength: 42,
 });
 
 export const defaultSceneLock = (): SceneLock => ({
@@ -122,11 +133,11 @@ export const defaultSceneLock = (): SceneLock => ({
 });
 
 export const defaultFinish = (): CompositeFinish => ({
-  diffusion: 0, diffusionRadius: 24, bloom: 0, bloomRadius: 36, vignette: 0,
+  diffusion: 0, diffusionRadius: 24, bloom: 0, bloomRadius: 36, vignette: 0, grain: 0,
 });
 
 export const mvFinish = (): CompositeFinish => ({
-  diffusion: 18, diffusionRadius: 24, bloom: 9, bloomRadius: 36, vignette: 6,
+  diffusion: 18, diffusionRadius: 24, bloom: 9, bloomRadius: 36, vignette: 6, grain: 7,
 });
 
 export const defaultDepthOfField = (): DepthOfFieldSettings => ({

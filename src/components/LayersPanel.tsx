@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- thumbnails are browser-local object/data URLs */
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderOpen, ImagePlus, Layers3, Lock, LockOpen, Trash2 } from 'lucide-react';
 import { isLayerEffectivelyVisible } from '../lib/renderer';
 import { useEditorStore } from '../store/editorStore';

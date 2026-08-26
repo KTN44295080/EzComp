@@ -1,4 +1,4 @@
-import { Download, Eye, FileDown, FilePlus2, FolderOpen, Hand, History, LoaderCircle, Maximize2, Minus, MousePointer2, Plus, Redo2, Save, ShieldCheck, Undo2 } from 'lucide-react';
+import { Download, Eye, FileDown, FilePlus2, FolderOpen, Hand, LoaderCircle, Maximize2, Minus, MousePointer2, Plus, Redo2, Save, ShieldCheck, Undo2 } from 'lucide-react';
 import { useEditorStore } from '../store/editorStore';
 interface Props { onNew: () => void; onImport: () => void; onOpenProject: () => void; onSaveProject: () => void; onExport: () => void; onFit: () => void }
 const clamp = (v: number) => Math.min(8, Math.max(.05, v));

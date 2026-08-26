@@ -12,6 +12,11 @@ export function pickSharedMatchAdjustments(adjustments: LayerAdjustments): Parti
   return Object.fromEntries(sharedMatchKeys.map((key) => [key, adjustments[key]])) as Partial<LayerAdjustments>;
 }
 
+export function findBackdropLayer(layers: RasterLayer[], selected: RasterLayer): RasterLayer | undefined {
+  const selectedIndex = layers.findIndex((layer) => layer.id === selected.id);
+  return layers.slice(0, Math.max(0, selectedIndex)).find((layer) => layer.kind !== 'group' && isLayerEffectivelyVisible(layer, layers) && layer.opacity > 0);
+}
+
 export interface ImageStats {
   luminance: number;
   contrast: number;
@@ -52,11 +57,11 @@ const colorHex = (red: number, green: number, blue: number): string => `#${[red,
 
 export function deriveAutoAdjustments(foreground: ImageStats, reference: ImageStats, preset: AutoCompositePreset): LayerAdjustments {
   const settings = {
-    balanced: { strength: .9, exposure: 0, contrast: 0, saturation: 0, temperature: 0, shadow: 35, wrap: 40, atmosphere: 10, grain: 8 },
-    cinematic: { strength: .82, exposure: -.08, contrast: 14, saturation: -8, temperature: -5, shadow: 42, wrap: 46, atmosphere: 12, grain: 10 },
-    soft: { strength: .72, exposure: .04, contrast: -12, saturation: -7, temperature: 2, shadow: 28, wrap: 36, atmosphere: 14, grain: 5 },
-    night: { strength: .96, exposure: -.42, contrast: 8, saturation: -14, temperature: -22, shadow: 46, wrap: 50, atmosphere: 16, grain: 11 },
-    vivid: { strength: .75, exposure: 0, contrast: 10, saturation: 16, temperature: 3, shadow: 34, wrap: 38, atmosphere: 8, grain: 8 },
+    balanced: { strength: .9, exposure: 0, contrast: 0, saturation: 0, temperature: 0, shadow: 35, wrap: 40, atmosphere: 10, grain: 8, projection: 68, length: 42, occlusion: 70, upper: 12, rim: 10 },
+    cinematic: { strength: .82, exposure: -.08, contrast: 14, saturation: -8, temperature: -5, shadow: 42, wrap: 46, atmosphere: 12, grain: 10, projection: 78, length: 58, occlusion: 78, upper: 14, rim: 15 },
+    soft: { strength: .72, exposure: .04, contrast: -12, saturation: -7, temperature: 2, shadow: 28, wrap: 36, atmosphere: 14, grain: 5, projection: 48, length: 34, occlusion: 60, upper: 15, rim: 8 },
+    night: { strength: .96, exposure: -.42, contrast: 8, saturation: -14, temperature: -22, shadow: 46, wrap: 50, atmosphere: 16, grain: 11, projection: 82, length: 66, occlusion: 82, upper: 8, rim: 18 },
+    vivid: { strength: .75, exposure: 0, contrast: 10, saturation: 16, temperature: 3, shadow: 34, wrap: 38, atmosphere: 8, grain: 8, projection: 62, length: 40, occlusion: 68, upper: 10, rim: 12 },
   }[preset];
   const matchExposure = Math.log2((reference.luminance + .018) / (foreground.luminance + .018));
   const exposure = clamp(matchExposure * settings.strength + settings.exposure, -2.5, 2.5), exposureGain = 2 ** exposure;
@@ -74,8 +79,13 @@ export function deriveAutoAdjustments(foreground: ImageStats, reference: ImageSt
     highlights: clamp((reference.high - adjustedHigh) * 120 * settings.strength, -65, 65),
     blur: preset === 'soft' ? .35 : preset === 'night' ? .2 : 0,
     shadowOpacity: settings.shadow,
+    shadowProjection: settings.projection,
+    shadowLength: settings.length,
     environmentColor: colorHex(reference.red, reference.green, reference.blue),
     lightWrap: settings.wrap,
+    occlusionOpacity: settings.occlusion,
+    upperBodyLight: settings.upper,
+    rimLight: settings.rim,
     atmosphere: settings.atmosphere,
     grain: settings.grain,
   };
@@ -94,7 +104,7 @@ function statsForLayer(layer: RasterLayer): ImageStats {
 function referenceStats(documentModel: CompositeDocument, layers: RasterLayer[], selected: RasterLayer, referenceId: string, scope: AutoCompositeScope): ImageStats {
   const selectedIndex = layers.findIndex((layer) => layer.id === selected.id);
   const below = layers.slice(0, selectedIndex).filter((layer) => layer.kind !== 'group');
-  const backdrop = below.find((layer) => isLayerEffectivelyVisible(layer, layers) && layer.opacity > 0) ?? below[0];
+  const backdrop = findBackdropLayer(layers, selected) ?? below[0];
   const allowed = new Set(referenceId === 'below' ? below.map((layer) => layer.id) : referenceId === 'backdrop' ? backdrop ? [backdrop.id] : [] : [referenceId]);
   const referenceLayers = layers.filter((layer) => layer.kind === 'group' || allowed.has(layer.id));
   if (!referenceLayers.some((layer) => layer.kind !== 'group')) throw new Error('Place a visible background below this layer or choose a reference layer.');
@@ -109,6 +119,21 @@ function referenceStats(documentModel: CompositeDocument, layers: RasterLayer[],
   return scene;
 }
 
+function inferredSubjectDepth(selected: RasterLayer, backdrop: RasterLayer): number | undefined {
+  const depthId = backdrop.depthOfField?.depthMapAssetId, depth = depthId ? getAsset(depthId) : undefined;
+  if (!depth) return undefined;
+  const selectedCenterX = selected.transform.x + selected.width * selected.transform.scaleX / 2, selectedCenterY = selected.transform.y + selected.height * selected.transform.scaleY / 2, selectedRadians = selected.transform.rotation * Math.PI / 180;
+  const localFootX = 0, localFootY = selected.height * selected.transform.scaleY * .45, footX = selectedCenterX + localFootX * Math.cos(selectedRadians) - localFootY * Math.sin(selectedRadians), footY = selectedCenterY + localFootX * Math.sin(selectedRadians) + localFootY * Math.cos(selectedRadians);
+  const backgroundCenterX = backdrop.transform.x + backdrop.width * backdrop.transform.scaleX / 2, backgroundCenterY = backdrop.transform.y + backdrop.height * backdrop.transform.scaleY / 2, backgroundRadians = -backdrop.transform.rotation * Math.PI / 180;
+  const deltaX = footX - backgroundCenterX, deltaY = footY - backgroundCenterY, rotatedX = deltaX * Math.cos(backgroundRadians) - deltaY * Math.sin(backgroundRadians), rotatedY = deltaX * Math.sin(backgroundRadians) + deltaY * Math.cos(backgroundRadians);
+  const localX = rotatedX / Math.max(.001, backdrop.transform.scaleX) + backdrop.width / 2, localY = rotatedY / Math.max(.001, backdrop.transform.scaleY) + backdrop.height / 2;
+  const canvas = document.createElement('canvas'); canvas.width = depth.width; canvas.height = depth.height; const context = canvas.getContext('2d', { willReadFrequently: true }); if (!context) return undefined; context.drawImage(depth.source, 0, 0, canvas.width, canvas.height);
+  const x = Math.max(0, Math.min(canvas.width - 1, Math.round(localX / backdrop.width * canvas.width))), y = Math.max(0, Math.min(canvas.height - 1, Math.round(localY / backdrop.height * canvas.height))), radius = 2, values: number[] = [];
+  const pixels = context.getImageData(Math.max(0, x - radius), Math.max(0, y - radius), Math.min(canvas.width - Math.max(0, x - radius), radius * 2 + 1), Math.min(canvas.height - Math.max(0, y - radius), radius * 2 + 1)).data;
+  for (let index = 0; index < pixels.length; index += 4) values.push((pixels[index] ?? 0) / 255); values.sort((a, b) => a - b); const sampled = values[Math.floor(values.length / 2)] ?? .5, normalized = backdrop.depthOfField.invert ? 1 - sampled : sampled;
+  return clamp(normalized * 100 + 3, 0, 100);
+}
+
 export function autoCompositeLayer(documentModel: CompositeDocument, layers: RasterLayer[], selected: RasterLayer, preset: AutoCompositePreset, referenceId = 'backdrop', scope: AutoCompositeScope = 'scene'): LayerAdjustments {
   if (selected.kind === 'group') throw new Error('Choose a raster layer to auto composite.');
   const adjustments = deriveAutoAdjustments(statsForLayer(selected), referenceStats(documentModel, layers, selected, referenceId, scope), preset);
@@ -116,5 +141,7 @@ export function autoCompositeLayer(documentModel: CompositeDocument, layers: Ras
   const visibleBlur = preset === 'soft' ? .65 : preset === 'cinematic' || preset === 'night' ? .48 : preset === 'balanced' ? .38 : .25;
   adjustments.blur = clamp(visibleBlur / scale, 0, 12); adjustments.lightWrapRadius = clamp(subjectSize * .014, 6, 34);
   adjustments.shadowBlur = clamp(subjectSize * .016, 7, 60); adjustments.shadowOffsetY = clamp(subjectSize * .008, 4, 34); adjustments.shadowOffsetX = 0;
+  const backdrop = findBackdropLayer(layers, selected), subjectDepth = backdrop ? inferredSubjectDepth(selected, backdrop) : undefined;
+  if (subjectDepth !== undefined) adjustments.occlusionDepth = subjectDepth;
   return adjustments;
 }

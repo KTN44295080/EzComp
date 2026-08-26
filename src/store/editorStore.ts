@@ -48,7 +48,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   setFinish: (patch) => set((state) => withHistory(state, { document: { ...state.document, finish: { ...defaultFinish(), ...state.document.finish, ...patch } } })),
   setSceneLock: (patch) => set((state) => ({ document: { ...state.document, sceneLock: { ...defaultSceneLock(), ...state.document.sceneLock, ...patch } } })),
   replaceProject: (document, layers, record = true) => set((state) => ({
-    ...(record ? withHistory(state, {}) : { past: [], future: [] }), document: { ...defaultDocument(), ...document, sceneLock: { ...defaultSceneLock(), ...document.sceneLock }, finish: { ...defaultFinish(), ...document.finish } }, layers: layers.map((layer) => ({ ...layer, depthOfField: { ...defaultDepthOfField(), ...layer.depthOfField } })),
+    ...(record ? withHistory(state, {}) : { past: [], future: [] }), document: { ...defaultDocument(), ...document, sceneLock: { ...defaultSceneLock(), ...document.sceneLock }, finish: { ...defaultFinish(), ...document.finish } }, layers: layers.map((layer) => ({ ...layer, adjustments: { ...defaultAdjustments(), ...layer.adjustments }, depthOfField: { ...defaultDepthOfField(), ...layer.depthOfField } })),
     selectedLayerId: topRasterId(layers), viewport: initialViewport(), message: `${rasterCount(layers)} layer${rasterCount(layers) === 1 ? '' : 's'} loaded`, error: null,
   })),
   appendLayers: (layers) => set((state) => withHistory(state, { layers: [...state.layers, ...layers], selectedLayerId: topRasterId(layers) ?? state.selectedLayerId, message: `${rasterCount(layers)} layer${rasterCount(layers) === 1 ? '' : 's'} imported` })),

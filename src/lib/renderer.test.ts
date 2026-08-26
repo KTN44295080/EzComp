@@ -9,6 +9,7 @@ describe('PNG export naming', () => {
 describe('global finishing stack', () => {
   it('bypasses a clean document', () => expect(hasCompositeFinish(defaultFinish())).toBe(false));
   it('activates for any visible finishing stage', () => expect(hasCompositeFinish({ ...defaultFinish(), diffusion: 1 })).toBe(true));
+  it('treats unified grain as a global finishing stage', () => expect(hasCompositeFinish({ ...defaultFinish(), grain: 1 })).toBe(true));
 });
 
 const layer = (id: string, patch: Partial<RasterLayer> = {}): RasterLayer => ({

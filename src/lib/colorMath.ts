@@ -36,7 +36,7 @@ function directionalLightFactor(x: number, y: number, width: number, height: num
   return smoothstep(-feather, feather, projection);
 }
 
-function adjustRgbInternal(rgb: Rgb, a: LayerAdjustments, keyLightMask: number, highlightColor: Rgb, shadowColor: Rgb, environmentColor: Rgb): Rgb {
+function adjustRgbInternal(rgb: Rgb, a: LayerAdjustments, keyLightMask: number, highlightColor: Rgb, shadowColor: Rgb, environmentColor: Rgb, upperBodyMask = 0, rimMask = 0): Rgb {
   const exposure = 2 ** a.exposure, contrast = 1 + a.contrast / 100, saturation = 1 + a.saturation / 100;
   let r = rgb.r * exposure, g = rgb.g * exposure, b = rgb.b * exposure;
   r = (r - 127.5) * contrast + 127.5; g = (g - 127.5) * contrast + 127.5; b = (b - 127.5) * contrast + 127.5;
@@ -57,6 +57,8 @@ function adjustRgbInternal(rgb: Rgb, a: LayerAdjustments, keyLightMask: number, 
   ({ r, g, b } = colorize({ r, g, b }, highlightColor, a.highlightTint / 100 * highlightWeight * .48));
   const directionalAmount = a.keyLightStrength / 100 * keyLightMask * (.05 + highlightWeight * .95);
   ({ r, g, b } = colorize({ r, g, b }, highlightColor, directionalAmount * .5, .08));
+  ({ r, g, b } = colorize({ r, g, b }, highlightColor, a.upperBodyLight / 100 * upperBodyMask * .3, .06));
+  ({ r, g, b } = colorize({ r, g, b }, highlightColor, a.rimLight / 100 * rimMask * .5, .12));
   return { r: clampByte(r), g: clampByte(g), b: clampByte(b) };
 }
 
@@ -67,12 +69,22 @@ export function adjustRgb(rgb: Rgb, adjustments: LayerAdjustments, keyLightMask 
 export function applyAdjustmentsToImageData(imageData: ImageData, adjustments: LayerAdjustments): ImageData {
   const data = imageData.data, width = imageData.width, height = imageData.height;
   const highlightColor = parseHexColor(adjustments.highlightColor, { r: 255, g: 145, b: 200 }), shadowColor = parseHexColor(adjustments.shadowColor, { r: 101, g: 185, b: 255 }), environmentColor = parseHexColor(adjustments.environmentColor, { r: 138, g: 169, b: 200 });
-  const hasDirectionalLight = adjustments.keyLightStrength > 0;
+  const hasDirectionalLight = adjustments.keyLightStrength > 0, hasSubjectMasks = adjustments.upperBodyLight > 0 || adjustments.rimLight > 0;
+  let alphaTop = 0, alphaBottom = Math.max(1, height - 1);
+  if (hasSubjectMasks) {
+    alphaTop = height; alphaBottom = 0;
+    for (let pixel = 0; pixel < width * height; pixel += 1) if ((data[pixel * 4 + 3] ?? 0) > 16) { const y = Math.floor(pixel / width); alphaTop = Math.min(alphaTop, y); alphaBottom = Math.max(alphaBottom, y); }
+    if (alphaBottom <= alphaTop) { alphaTop = 0; alphaBottom = Math.max(1, height - 1); }
+  }
+  const radians = adjustments.keyLightAngle * Math.PI / 180, rimRadius = Math.max(1, Math.round(Math.min(width, height) * .008)), rimOffsetX = Math.round(Math.cos(radians) * rimRadius), rimOffsetY = Math.round(Math.sin(radians) * rimRadius);
   for (let i = 0; i < data.length; i += 4) {
     if ((data[i + 3] ?? 0) === 0) continue;
     const pixel = i / 4, x = pixel % width, y = Math.floor(pixel / width);
     const keyLightMask = hasDirectionalLight ? directionalLightFactor(x, y, width, height, adjustments.keyLightAngle, adjustments.keyLightSoftness) : 0;
-    const adjusted = adjustRgbInternal({ r: data[i] ?? 0, g: data[i + 1] ?? 0, b: data[i + 2] ?? 0 }, adjustments, keyLightMask, highlightColor, shadowColor, environmentColor);
+    const bodyY = clamp((y - alphaTop) / Math.max(1, alphaBottom - alphaTop), 0, 1), upperBodyMask = adjustments.upperBodyLight > 0 ? (1 - smoothstep(.18, .72, bodyY)) * (.35 + keyLightMask * .65) : 0;
+    const neighborX = Math.round(x + rimOffsetX), neighborY = Math.round(y + rimOffsetY), neighborAlpha = neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height ? 0 : (data[(neighborY * width + neighborX) * 4 + 3] ?? 0) / 255;
+    const rimMask = adjustments.rimLight > 0 ? clamp(1 - neighborAlpha * 1.35, 0, 1) * (.3 + keyLightMask * .7) : 0;
+    const adjusted = adjustRgbInternal({ r: data[i] ?? 0, g: data[i + 1] ?? 0, b: data[i + 2] ?? 0 }, adjustments, keyLightMask, highlightColor, shadowColor, environmentColor, upperBodyMask, rimMask);
     let seed = Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263);
     seed = Math.imul(seed ^ (seed >>> 13), 1274126177);
     const grain = ((seed >>> 0) / 4294967295 - .5) * 2 * adjustments.grain / 100 * 10;
@@ -82,5 +94,5 @@ export function applyAdjustmentsToImageData(imageData: ImageData, adjustments: L
 }
 
 export function hasPixelAdjustments(a: LayerAdjustments): boolean {
-  return a.exposure !== 0 || a.contrast !== 0 || a.saturation !== 0 || a.temperature !== 0 || a.tint !== 0 || a.shadows !== 0 || a.highlights !== 0 || a.highlightTint !== 0 || a.shadowTint !== 0 || a.keyLightStrength !== 0 || a.atmosphere !== 0 || a.grain !== 0;
+  return a.exposure !== 0 || a.contrast !== 0 || a.saturation !== 0 || a.temperature !== 0 || a.tint !== 0 || a.shadows !== 0 || a.highlights !== 0 || a.highlightTint !== 0 || a.shadowTint !== 0 || a.keyLightStrength !== 0 || a.upperBodyLight !== 0 || a.rimLight !== 0 || a.atmosphere !== 0 || a.grain !== 0;
 }
