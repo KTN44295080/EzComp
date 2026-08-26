@@ -6,7 +6,7 @@ export const autoCompositePresets = ['balanced', 'cinematic', 'soft', 'night', '
 export type AutoCompositePreset = (typeof autoCompositePresets)[number];
 export type AutoCompositeScope = 'scene' | 'local';
 export const autoCompositeLabels: Record<AutoCompositePreset, string> = { balanced: 'Balanced', cinematic: 'Cinematic', soft: 'Soft', night: 'Night', vivid: 'Vivid' };
-const sharedMatchKeys = ['exposure', 'contrast', 'saturation', 'temperature', 'tint', 'shadows', 'highlights', 'blur'] as const;
+const sharedMatchKeys = ['exposure', 'contrast', 'saturation', 'temperature', 'tint', 'shadows', 'highlights', 'environmentColor', 'lightWrap', 'atmosphere', 'grain'] as const;
 
 export function pickSharedMatchAdjustments(adjustments: LayerAdjustments): Partial<LayerAdjustments> {
   return Object.fromEntries(sharedMatchKeys.map((key) => [key, adjustments[key]])) as Partial<LayerAdjustments>;
@@ -21,13 +21,16 @@ export interface ImageStats {
   low: number;
   high: number;
   pixels: number;
+  red: number;
+  green: number;
+  blue: number;
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
 export function imageStats(imageData: ImageData): ImageStats {
   const histogram = new Float64Array(256);
-  let pixels = 0, sumLuminance = 0, sumLuminanceSquared = 0, sumSaturation = 0;
+  let pixels = 0, sumLuminance = 0, sumLuminanceSquared = 0, sumSaturation = 0, sumRed = 0, sumGreen = 0, sumBlue = 0;
   let neutralPixels = 0, neutralR = 0, neutralG = 0, neutralB = 0;
   const data = imageData.data;
   for (let i = 0; i < data.length; i += 4) {
@@ -35,23 +38,25 @@ export function imageStats(imageData: ImageData): ImageStats {
     const r = (data[i] ?? 0) / 255, g = (data[i + 1] ?? 0) / 255, b = (data[i + 2] ?? 0) / 255;
     const luminance = r * .2126 + g * .7152 + b * .0722, max = Math.max(r, g, b), min = Math.min(r, g, b), saturation = max <= .001 ? 0 : (max - min) / max;
     const neutralWeight = alpha * (.035 + (1 - saturation) ** 4) * (.55 + luminance * .45);
-    pixels += alpha; sumLuminance += luminance * alpha; sumLuminanceSquared += luminance * luminance * alpha; sumSaturation += saturation * alpha;
+    pixels += alpha; sumLuminance += luminance * alpha; sumLuminanceSquared += luminance * luminance * alpha; sumSaturation += saturation * alpha; sumRed += r * alpha; sumGreen += g * alpha; sumBlue += b * alpha;
     neutralPixels += neutralWeight; neutralR += r * neutralWeight; neutralG += g * neutralWeight; neutralB += b * neutralWeight;
     histogram[Math.round(luminance * 255)] = (histogram[Math.round(luminance * 255)] ?? 0) + alpha;
   }
   if (pixels < 1) throw new Error('The selected layer or reference has no visible pixels.');
   const luminance = sumLuminance / pixels, channelR = neutralR / Math.max(.001, neutralPixels), channelG = neutralG / Math.max(.001, neutralPixels), channelB = neutralB / Math.max(.001, neutralPixels);
   const percentile = (target: number): number => { let cumulative = 0; for (let i = 0; i < histogram.length; i += 1) { cumulative += histogram[i] ?? 0; if (cumulative >= pixels * target) return i / 255; } return 1; };
-  return { luminance, contrast: Math.sqrt(Math.max(0, sumLuminanceSquared / pixels - luminance * luminance)), saturation: sumSaturation / pixels, warmth: channelR - channelB, tint: channelG - (channelR + channelB) / 2, low: percentile(.2), high: percentile(.8), pixels };
+  return { luminance, contrast: Math.sqrt(Math.max(0, sumLuminanceSquared / pixels - luminance * luminance)), saturation: sumSaturation / pixels, warmth: channelR - channelB, tint: channelG - (channelR + channelB) / 2, low: percentile(.2), high: percentile(.8), pixels, red: sumRed / pixels, green: sumGreen / pixels, blue: sumBlue / pixels };
 }
+
+const colorHex = (red: number, green: number, blue: number): string => `#${[red, green, blue].map((channel) => Math.round(clamp(channel, 0, 1) * 255).toString(16).padStart(2, '0')).join('')}`;
 
 export function deriveAutoAdjustments(foreground: ImageStats, reference: ImageStats, preset: AutoCompositePreset): LayerAdjustments {
   const settings = {
-    balanced: { strength: .9, exposure: 0, contrast: 0, saturation: 0, temperature: 0, shadow: 24 },
-    cinematic: { strength: .82, exposure: -.08, contrast: 14, saturation: -8, temperature: -5, shadow: 30 },
-    soft: { strength: .72, exposure: .04, contrast: -12, saturation: -7, temperature: 2, shadow: 16 },
-    night: { strength: .96, exposure: -.42, contrast: 8, saturation: -14, temperature: -22, shadow: 34 },
-    vivid: { strength: .75, exposure: 0, contrast: 10, saturation: 16, temperature: 3, shadow: 22 },
+    balanced: { strength: .9, exposure: 0, contrast: 0, saturation: 0, temperature: 0, shadow: 35, wrap: 40, atmosphere: 10, grain: 8 },
+    cinematic: { strength: .82, exposure: -.08, contrast: 14, saturation: -8, temperature: -5, shadow: 42, wrap: 46, atmosphere: 12, grain: 10 },
+    soft: { strength: .72, exposure: .04, contrast: -12, saturation: -7, temperature: 2, shadow: 28, wrap: 36, atmosphere: 14, grain: 5 },
+    night: { strength: .96, exposure: -.42, contrast: 8, saturation: -14, temperature: -22, shadow: 46, wrap: 50, atmosphere: 16, grain: 11 },
+    vivid: { strength: .75, exposure: 0, contrast: 10, saturation: 16, temperature: 3, shadow: 34, wrap: 38, atmosphere: 8, grain: 8 },
   }[preset];
   const matchExposure = Math.log2((reference.luminance + .018) / (foreground.luminance + .018));
   const exposure = clamp(matchExposure * settings.strength + settings.exposure, -2.5, 2.5), exposureGain = 2 ** exposure;
@@ -69,6 +74,10 @@ export function deriveAutoAdjustments(foreground: ImageStats, reference: ImageSt
     highlights: clamp((reference.high - adjustedHigh) * 120 * settings.strength, -65, 65),
     blur: preset === 'soft' ? .35 : preset === 'night' ? .2 : 0,
     shadowOpacity: settings.shadow,
+    environmentColor: colorHex(reference.red, reference.green, reference.blue),
+    lightWrap: settings.wrap,
+    atmosphere: settings.atmosphere,
+    grain: settings.grain,
   };
 }
 
@@ -103,7 +112,9 @@ function referenceStats(documentModel: CompositeDocument, layers: RasterLayer[],
 export function autoCompositeLayer(documentModel: CompositeDocument, layers: RasterLayer[], selected: RasterLayer, preset: AutoCompositePreset, referenceId = 'backdrop', scope: AutoCompositeScope = 'scene'): LayerAdjustments {
   if (selected.kind === 'group') throw new Error('Choose a raster layer to auto composite.');
   const adjustments = deriveAutoAdjustments(statsForLayer(selected), referenceStats(documentModel, layers, selected, referenceId, scope), preset);
-  const subjectSize = Math.max(1, Math.min(selected.width * Math.abs(selected.transform.scaleX), selected.height * Math.abs(selected.transform.scaleY)));
-  adjustments.shadowBlur = clamp(subjectSize * .012, 6, 54); adjustments.shadowOffsetY = clamp(subjectSize * .009, 4, 38); adjustments.shadowOffsetX = 0;
+  const scale = Math.max(.02, Math.min(Math.abs(selected.transform.scaleX), Math.abs(selected.transform.scaleY))), subjectSize = Math.max(1, Math.min(selected.width * Math.abs(selected.transform.scaleX), selected.height * Math.abs(selected.transform.scaleY)));
+  const visibleBlur = preset === 'soft' ? .65 : preset === 'cinematic' || preset === 'night' ? .48 : preset === 'balanced' ? .38 : .25;
+  adjustments.blur = clamp(visibleBlur / scale, 0, 12); adjustments.lightWrapRadius = clamp(subjectSize * .014, 6, 34);
+  adjustments.shadowBlur = clamp(subjectSize * .016, 7, 60); adjustments.shadowOffsetY = clamp(subjectSize * .008, 4, 34); adjustments.shadowOffsetX = 0;
   return adjustments;
 }

@@ -44,6 +44,11 @@ export interface LayerAdjustments {
   keyLightStrength: number;
   keyLightAngle: number;
   keyLightSoftness: number;
+  environmentColor: string;
+  lightWrap: number;
+  lightWrapRadius: number;
+  atmosphere: number;
+  grain: number;
 }
 
 export interface SceneLock {
@@ -87,6 +92,8 @@ export const defaultAdjustments = (): LayerAdjustments => ({
   highlightColor: '#ff91c8', highlightTint: 0,
   shadowColor: '#65b9ff', shadowTint: 0, lightingBalance: 0,
   keyLightStrength: 0, keyLightAngle: 315, keyLightSoftness: 70,
+  environmentColor: '#8aa9c8', lightWrap: 0, lightWrapRadius: 12,
+  atmosphere: 0, grain: 0,
 });
 
 export const defaultSceneLock = (): SceneLock => ({

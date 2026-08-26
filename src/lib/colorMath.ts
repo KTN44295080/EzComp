@@ -36,7 +36,7 @@ function directionalLightFactor(x: number, y: number, width: number, height: num
   return smoothstep(-feather, feather, projection);
 }
 
-function adjustRgbInternal(rgb: Rgb, a: LayerAdjustments, keyLightMask: number, highlightColor: Rgb, shadowColor: Rgb): Rgb {
+function adjustRgbInternal(rgb: Rgb, a: LayerAdjustments, keyLightMask: number, highlightColor: Rgb, shadowColor: Rgb, environmentColor: Rgb): Rgb {
   const exposure = 2 ** a.exposure, contrast = 1 + a.contrast / 100, saturation = 1 + a.saturation / 100;
   let r = rgb.r * exposure, g = rgb.g * exposure, b = rgb.b * exposure;
   r = (r - 127.5) * contrast + 127.5; g = (g - 127.5) * contrast + 127.5; b = (b - 127.5) * contrast + 127.5;
@@ -47,6 +47,8 @@ function adjustRgbInternal(rgb: Rgb, a: LayerAdjustments, keyLightMask: number, 
   const normalizedLuminance = clamp((r * .2126 + g * .7152 + b * .0722) / 255, 0, 1);
   const tonalDelta = (a.shadows / 100 * 58 * (1 - normalizedLuminance) ** 2) + (a.highlights / 100 * 58 * normalizedLuminance ** 2);
   r += tonalDelta; g += tonalDelta; b += tonalDelta;
+
+  ({ r, g, b } = colorize({ r, g, b }, environmentColor, a.atmosphere / 100 * .5));
 
   const balancePoint = clamp(.58 - a.lightingBalance / 350, .32, .82);
   const shadowWeight = 1 - smoothstep(balancePoint - .24, balancePoint + .02, normalizedLuminance);
@@ -59,23 +61,26 @@ function adjustRgbInternal(rgb: Rgb, a: LayerAdjustments, keyLightMask: number, 
 }
 
 export function adjustRgb(rgb: Rgb, adjustments: LayerAdjustments, keyLightMask = 0): Rgb {
-  return adjustRgbInternal(rgb, adjustments, keyLightMask, parseHexColor(adjustments.highlightColor, { r: 255, g: 145, b: 200 }), parseHexColor(adjustments.shadowColor, { r: 101, g: 185, b: 255 }));
+  return adjustRgbInternal(rgb, adjustments, keyLightMask, parseHexColor(adjustments.highlightColor, { r: 255, g: 145, b: 200 }), parseHexColor(adjustments.shadowColor, { r: 101, g: 185, b: 255 }), parseHexColor(adjustments.environmentColor, { r: 138, g: 169, b: 200 }));
 }
 
 export function applyAdjustmentsToImageData(imageData: ImageData, adjustments: LayerAdjustments): ImageData {
   const data = imageData.data, width = imageData.width, height = imageData.height;
-  const highlightColor = parseHexColor(adjustments.highlightColor, { r: 255, g: 145, b: 200 }), shadowColor = parseHexColor(adjustments.shadowColor, { r: 101, g: 185, b: 255 });
+  const highlightColor = parseHexColor(adjustments.highlightColor, { r: 255, g: 145, b: 200 }), shadowColor = parseHexColor(adjustments.shadowColor, { r: 101, g: 185, b: 255 }), environmentColor = parseHexColor(adjustments.environmentColor, { r: 138, g: 169, b: 200 });
   const hasDirectionalLight = adjustments.keyLightStrength > 0;
   for (let i = 0; i < data.length; i += 4) {
     if ((data[i + 3] ?? 0) === 0) continue;
     const pixel = i / 4, x = pixel % width, y = Math.floor(pixel / width);
     const keyLightMask = hasDirectionalLight ? directionalLightFactor(x, y, width, height, adjustments.keyLightAngle, adjustments.keyLightSoftness) : 0;
-    const adjusted = adjustRgbInternal({ r: data[i] ?? 0, g: data[i + 1] ?? 0, b: data[i + 2] ?? 0 }, adjustments, keyLightMask, highlightColor, shadowColor);
-    data[i] = adjusted.r; data[i + 1] = adjusted.g; data[i + 2] = adjusted.b;
+    const adjusted = adjustRgbInternal({ r: data[i] ?? 0, g: data[i + 1] ?? 0, b: data[i + 2] ?? 0 }, adjustments, keyLightMask, highlightColor, shadowColor, environmentColor);
+    let seed = Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263);
+    seed = Math.imul(seed ^ (seed >>> 13), 1274126177);
+    const grain = ((seed >>> 0) / 4294967295 - .5) * 2 * adjustments.grain / 100 * 10;
+    data[i] = clampByte(adjusted.r + grain); data[i + 1] = clampByte(adjusted.g + grain); data[i + 2] = clampByte(adjusted.b + grain);
   }
   return imageData;
 }
 
 export function hasPixelAdjustments(a: LayerAdjustments): boolean {
-  return a.exposure !== 0 || a.contrast !== 0 || a.saturation !== 0 || a.temperature !== 0 || a.tint !== 0 || a.shadows !== 0 || a.highlights !== 0 || a.highlightTint !== 0 || a.shadowTint !== 0 || a.keyLightStrength !== 0;
+  return a.exposure !== 0 || a.contrast !== 0 || a.saturation !== 0 || a.temperature !== 0 || a.tint !== 0 || a.shadows !== 0 || a.highlights !== 0 || a.highlightTint !== 0 || a.shadowTint !== 0 || a.keyLightStrength !== 0 || a.atmosphere !== 0 || a.grain !== 0;
 }

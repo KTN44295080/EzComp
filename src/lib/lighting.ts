@@ -11,7 +11,7 @@ export const lightingPresetLabels: Record<LightingPreset, string> = {
 };
 
 const presets: Record<LightingPreset, Pick<LayerAdjustments, 'highlightColor' | 'highlightTint' | 'shadowColor' | 'shadowTint' | 'lightingBalance' | 'keyLightStrength' | 'keyLightAngle' | 'keyLightSoftness'>> = {
-  'pink-cyan': { highlightColor: '#f2b9d2', highlightTint: 52, shadowColor: '#88b7dc', shadowTint: 16, lightingBalance: -14, keyLightStrength: 34, keyLightAngle: 315, keyLightSoftness: 84 },
+  'pink-cyan': { highlightColor: '#f2b9d2', highlightTint: 68, shadowColor: '#88b7dc', shadowTint: 18, lightingBalance: -14, keyLightStrength: 44, keyLightAngle: 315, keyLightSoftness: 84 },
   neon: { highlightColor: '#ff58dc', highlightTint: 42, shadowColor: '#416dff', shadowTint: 34, lightingBalance: 2, keyLightStrength: 48, keyLightAngle: 330, keyLightSoftness: 58 },
   sunset: { highlightColor: '#ffad73', highlightTint: 36, shadowColor: '#6551b8', shadowTint: 24, lightingBalance: 5, keyLightStrength: 42, keyLightAngle: 300, keyLightSoftness: 68 },
   moonlight: { highlightColor: '#c7e7ff', highlightTint: 25, shadowColor: '#315ba5', shadowTint: 32, lightingBalance: -8, keyLightStrength: 28, keyLightAngle: 270, keyLightSoftness: 80 },

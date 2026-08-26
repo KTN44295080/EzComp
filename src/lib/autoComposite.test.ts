@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { deriveAutoAdjustments, imageStats, pickSharedMatchAdjustments, type ImageStats } from './autoComposite';
 
-const stats = (patch: Partial<ImageStats> = {}): ImageStats => ({ luminance: .5, contrast: .2, saturation: .3, warmth: 0, tint: 0, low: .2, high: .8, pixels: 1000, ...patch });
+const stats = (patch: Partial<ImageStats> = {}): ImageStats => ({ luminance: .5, contrast: .2, saturation: .3, warmth: 0, tint: 0, low: .2, high: .8, pixels: 1000, red: .5, green: .5, blue: .5, ...patch });
 
 describe('auto composite adjustment model', () => {
   it('brightens a darker foreground toward its reference', () => {
     const result = deriveAutoAdjustments(stats({ luminance: .2, low: .08, high: .45 }), stats({ luminance: .55 }), 'balanced');
     expect(result.exposure).toBeGreaterThan(0);
     expect(result.shadowOpacity).toBeGreaterThan(0);
+    expect(result.lightWrap).toBeGreaterThan(0);
+    expect(result.grain).toBeGreaterThan(0);
+  });
+
+  it('carries the sampled environment color into integration effects', () => {
+    const result = deriveAutoAdjustments(stats(), stats({ red: .2, green: .45, blue: .75 }), 'balanced');
+    expect(result.environmentColor).toBe('#3373bf');
+    expect(result.atmosphere).toBeGreaterThan(0);
   });
 
   it('cools and darkens with the night preset', () => {
