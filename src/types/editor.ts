@@ -13,6 +13,25 @@ export interface CompositeDocument {
   height: number;
   background: 'transparent' | 'black' | 'white';
   sceneLock: SceneLock;
+  finish: CompositeFinish;
+}
+
+export interface CompositeFinish {
+  diffusion: number;
+  diffusionRadius: number;
+  bloom: number;
+  bloomRadius: number;
+  vignette: number;
+}
+
+export interface DepthOfFieldSettings {
+  enabled: boolean;
+  depthMapAssetId: string | null;
+  method: 'ai' | 'fast' | null;
+  focus: number;
+  focusRange: number;
+  maxBlur: number;
+  invert: boolean;
 }
 
 export interface LayerTransform {
@@ -81,6 +100,7 @@ export interface RasterLayer {
   blendMode: BlendMode;
   transform: LayerTransform;
   adjustments: LayerAdjustments;
+  depthOfField: DepthOfFieldSettings;
 }
 
 export interface ViewportState { zoom: number; panX: number; panY: number }
@@ -101,8 +121,21 @@ export const defaultSceneLock = (): SceneLock => ({
   sourceLayerId: null, sourceLayerName: null, adjustments: null,
 });
 
+export const defaultFinish = (): CompositeFinish => ({
+  diffusion: 0, diffusionRadius: 24, bloom: 0, bloomRadius: 36, vignette: 0,
+});
+
+export const mvFinish = (): CompositeFinish => ({
+  diffusion: 18, diffusionRadius: 24, bloom: 9, bloomRadius: 36, vignette: 6,
+});
+
+export const defaultDepthOfField = (): DepthOfFieldSettings => ({
+  enabled: false, depthMapAssetId: null, method: null,
+  focus: 58, focusRange: 12, maxBlur: 18, invert: false,
+});
+
 export const defaultDocument = (): CompositeDocument => ({
-  name: 'Untitled', width: 1920, height: 1080, background: 'transparent', sceneLock: defaultSceneLock(),
+  name: 'Untitled', width: 1920, height: 1080, background: 'transparent', sceneLock: defaultSceneLock(), finish: defaultFinish(),
 });
 
 export const defaultTransform = (): LayerTransform => ({

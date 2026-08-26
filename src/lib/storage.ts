@@ -1,5 +1,5 @@
 import { assetToBlob, clearAssets, restoreAsset } from './assets';
-import { defaultAdjustments, defaultDocument, defaultSceneLock, type CompositeDocument, type RasterLayer } from '../types/editor';
+import { defaultAdjustments, defaultDepthOfField, defaultDocument, defaultFinish, defaultSceneLock, type CompositeDocument, type RasterLayer } from '../types/editor';
 
 export const PROJECT_EXTENSION = '.ezcomp';
 const DB_NAME = 'ezcomp-local';
@@ -22,7 +22,12 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 async function capture(snapshot: ProjectSnapshot): Promise<StoredProject> {
-  const entries = await Promise.all(snapshot.layers.filter((layer) => layer.kind !== 'group' && layer.assetId).map(async (layer) => [layer.assetId, await assetToBlob(layer.assetId)] as const));
+  const assetIds = new Set<string>();
+  for (const layer of snapshot.layers) {
+    if (layer.kind !== 'group' && layer.assetId) assetIds.add(layer.assetId);
+    if (layer.depthOfField?.depthMapAssetId) assetIds.add(layer.depthOfField.depthMapAssetId);
+  }
+  const entries = await Promise.all([...assetIds].map(async (assetId) => [assetId, await assetToBlob(assetId)] as const));
   return { version: 1, document: snapshot.document, layers: snapshot.layers, assets: Object.fromEntries(entries) };
 }
 
@@ -30,7 +35,7 @@ async function hydrate(project: StoredProject): Promise<ProjectSnapshot> {
   if (project.version !== 1 || !project.document || !Array.isArray(project.layers)) throw new Error('Unsupported EzComp project.');
   clearAssets();
   await Promise.all(Object.entries(project.assets).map(([id, blob]) => restoreAsset(id, blob)));
-  return { document: { ...defaultDocument(), ...project.document, sceneLock: { ...defaultSceneLock(), ...project.document.sceneLock } }, layers: project.layers.map((layer) => ({ ...layer, kind: layer.kind ?? 'raster', depth: layer.depth ?? 0, adjustments: { ...defaultAdjustments(), ...layer.adjustments } })) };
+  return { document: { ...defaultDocument(), ...project.document, sceneLock: { ...defaultSceneLock(), ...project.document.sceneLock }, finish: { ...defaultFinish(), ...project.document.finish } }, layers: project.layers.map((layer) => ({ ...layer, kind: layer.kind ?? 'raster', depth: layer.depth ?? 0, adjustments: { ...defaultAdjustments(), ...layer.adjustments }, depthOfField: { ...defaultDepthOfField(), ...layer.depthOfField } })) };
 }
 
 export async function saveAutosave(snapshot: ProjectSnapshot): Promise<void> {

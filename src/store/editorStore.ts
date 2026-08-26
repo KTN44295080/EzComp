@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { defaultAdjustments, defaultDocument, defaultSceneLock, type CompositeDocument, type EditorTool, type LayerAdjustments, type LayerTransform, type RasterLayer, type SceneLock, type ViewportState } from '../types/editor';
+import { defaultAdjustments, defaultDepthOfField, defaultDocument, defaultFinish, defaultSceneLock, type CompositeDocument, type CompositeFinish, type DepthOfFieldSettings, type EditorTool, type LayerAdjustments, type LayerTransform, type RasterLayer, type SceneLock, type ViewportState } from '../types/editor';
 import { makeId } from '../lib/id';
 
 interface HistorySnapshot { document: CompositeDocument; layers: RasterLayer[]; selectedLayerId: string | null }
@@ -9,12 +9,14 @@ interface EditorState {
   compareBefore: boolean; message: string; error: string | null;
   past: HistorySnapshot[]; future: HistorySnapshot[]; transactionBase: HistorySnapshot | null;
   setDocument: (patch: Partial<CompositeDocument>) => void;
+  setFinish: (patch: Partial<CompositeFinish>) => void;
   setSceneLock: (patch: Partial<SceneLock>) => void;
   replaceProject: (document: CompositeDocument, layers: RasterLayer[], record?: boolean) => void;
   appendLayers: (layers: RasterLayer[]) => void; selectLayer: (id: string | null) => void;
   patchLayer: (id: string, patch: Partial<RasterLayer>) => void;
   patchLayerTransform: (id: string, patch: Partial<LayerTransform>) => void;
   patchLayerAdjustments: (id: string, patch: Partial<LayerAdjustments>) => void;
+  patchLayerDepthOfField: (id: string, patch: Partial<DepthOfFieldSettings>) => void;
   resetAdjustment: (id: string, key: keyof LayerAdjustments) => void; resetLayerValues: (id: string) => void;
   removeLayer: (id: string) => void; duplicateLayer: (id: string) => void;
   moveLayer: (id: string, direction: 'up' | 'down') => void;
@@ -43,9 +45,10 @@ export const useEditorStore = create<EditorState>((set) => ({
   isImporting: false, isRestoring: true, compareBefore: false, message: 'Ready', error: null,
   past: [], future: [], transactionBase: null,
   setDocument: (patch) => set((state) => withHistory(state, { document: { ...state.document, ...patch } })),
+  setFinish: (patch) => set((state) => withHistory(state, { document: { ...state.document, finish: { ...defaultFinish(), ...state.document.finish, ...patch } } })),
   setSceneLock: (patch) => set((state) => ({ document: { ...state.document, sceneLock: { ...defaultSceneLock(), ...state.document.sceneLock, ...patch } } })),
   replaceProject: (document, layers, record = true) => set((state) => ({
-    ...(record ? withHistory(state, {}) : { past: [], future: [] }), document: { ...defaultDocument(), ...document, sceneLock: { ...defaultSceneLock(), ...document.sceneLock } }, layers,
+    ...(record ? withHistory(state, {}) : { past: [], future: [] }), document: { ...defaultDocument(), ...document, sceneLock: { ...defaultSceneLock(), ...document.sceneLock }, finish: { ...defaultFinish(), ...document.finish } }, layers: layers.map((layer) => ({ ...layer, depthOfField: { ...defaultDepthOfField(), ...layer.depthOfField } })),
     selectedLayerId: topRasterId(layers), viewport: initialViewport(), message: `${rasterCount(layers)} layer${rasterCount(layers) === 1 ? '' : 's'} loaded`, error: null,
   })),
   appendLayers: (layers) => set((state) => withHistory(state, { layers: [...state.layers, ...layers], selectedLayerId: topRasterId(layers) ?? state.selectedLayerId, message: `${rasterCount(layers)} layer${rasterCount(layers) === 1 ? '' : 's'} imported` })),
@@ -53,8 +56,9 @@ export const useEditorStore = create<EditorState>((set) => ({
   patchLayer: (id, patch) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, ...patch } : layer) })),
   patchLayerTransform: (id, patch) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, transform: { ...layer.transform, ...patch } } : layer) })),
   patchLayerAdjustments: (id, patch) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, adjustments: { ...layer.adjustments, ...patch } } : layer) })),
+  patchLayerDepthOfField: (id, patch) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, depthOfField: { ...defaultDepthOfField(), ...layer.depthOfField, ...patch } } : layer) })),
   resetAdjustment: (id, key) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, adjustments: { ...layer.adjustments, [key]: defaultAdjustments()[key] } } : layer) })),
-  resetLayerValues: (id) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, opacity: 100, blendMode: 'source-over', transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }, adjustments: defaultAdjustments() } : layer), message: 'Layer values reset' })),
+  resetLayerValues: (id) => set((state) => withHistory(state, { layers: state.layers.map((layer) => layer.id === id ? { ...layer, opacity: 100, blendMode: 'source-over', transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 }, adjustments: defaultAdjustments(), depthOfField: defaultDepthOfField() } : layer), message: 'Layer values reset' })),
   removeLayer: (id) => set((state) => { const removed = new Set([id]); let changed = true; while (changed) { changed = false; for (const layer of state.layers) if (layer.parentId && removed.has(layer.parentId) && !removed.has(layer.id)) { removed.add(layer.id); changed = true; } } const next = state.layers.filter((layer) => !removed.has(layer.id)); return withHistory(state, { layers: next, selectedLayerId: state.selectedLayerId && removed.has(state.selectedLayerId) ? topRasterId(next) : state.selectedLayerId, message: removed.size > 1 ? 'Group and contents removed' : 'Layer removed' }); }),
   duplicateLayer: (id) => set((state) => { const index = state.layers.findIndex((l) => l.id === id); const source = state.layers[index]; if (!source || source.kind === 'group' || source.parentId) return state; const copy = { ...structuredClone(source), id: makeId(), name: `${source.name} copy`, transform: { ...source.transform, x: source.transform.x + 20, y: source.transform.y + 20 } }; const layers = [...state.layers]; layers.splice(index + 1, 0, copy); return withHistory(state, { layers, selectedLayerId: copy.id, message: 'Layer duplicated' }); }),
   moveLayer: (id, direction) => set((state) => { const from = state.layers.findIndex((l) => l.id === id), current = state.layers[from]; if (!current || current.kind === 'group' || current.parentId) return state; const to = direction === 'up' ? from + 1 : from - 1; if (to < 0 || to >= state.layers.length || state.layers[to]?.kind === 'group' || state.layers[to]?.parentId) return state; const layers = [...state.layers]; const [layer] = layers.splice(from, 1); if (!layer) return state; layers.splice(to, 0, layer); return withHistory(state, { layers }); }),

@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { isLayerEffectivelyVisible, pngFileName } from './renderer';
-import { defaultAdjustments, defaultTransform, type RasterLayer } from '../types/editor';
+import { hasCompositeFinish, isLayerEffectivelyVisible, pngFileName } from './renderer';
+import { defaultAdjustments, defaultDepthOfField, defaultFinish, defaultTransform, type RasterLayer } from '../types/editor';
 describe('PNG export naming', () => {
   it('uses the document name', () => expect(pngFileName('Composite 01')).toBe('Composite 01.png'));
   it('falls back for an empty name', () => expect(pngFileName('  ')).toBe('ezcomp.png'));
 });
 
+describe('global finishing stack', () => {
+  it('bypasses a clean document', () => expect(hasCompositeFinish(defaultFinish())).toBe(false));
+  it('activates for any visible finishing stage', () => expect(hasCompositeFinish({ ...defaultFinish(), diffusion: 1 })).toBe(true));
+});
+
 const layer = (id: string, patch: Partial<RasterLayer> = {}): RasterLayer => ({
   id, assetId: id, kind: 'raster', name: id, width: 10, height: 10, visible: true, locked: false,
-  opacity: 100, blendMode: 'source-over', transform: defaultTransform(), adjustments: defaultAdjustments(), ...patch,
+  opacity: 100, blendMode: 'source-over', transform: defaultTransform(), adjustments: defaultAdjustments(), depthOfField: defaultDepthOfField(), ...patch,
 });
 
 describe('layer visibility inheritance', () => {
