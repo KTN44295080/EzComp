@@ -2,6 +2,7 @@ import { getAsset } from './assets';
 import { applyAdjustmentsToImageData, hasPixelAdjustments } from './colorMath';
 import { ambientOcclusionDepthWeight, depthBandWeights, depthOcclusionWeight, groundDepthWeight, normalizedDepthBlur, projectedShadowMatrix } from './sceneGeometry';
 import { EXPORT_DPI, withPngDpi } from './pngMetadata';
+import { createRasterPdf } from './pdfExport';
 import { defaultDepthOfField, defaultFinish, type CompositeDocument, type CompositeFinish, type RasterLayer } from '../types/editor';
 
 const rasterCache = new Map<string, { key: string; canvas: HTMLCanvasElement }>();
@@ -251,4 +252,14 @@ export function renderPreviewComposition(documentModel: CompositeDocument, layer
 }
 export function renderDocumentToCanvas(documentModel: CompositeDocument, layers: RasterLayer[]): HTMLCanvasElement { const canvas = createCanvas(documentModel.width, documentModel.height), context = canvas.getContext('2d'); if (!context) throw new Error('Canvas 2D is unavailable in this browser.'); drawComposition(context, documentModel, layers); sceneDepthOfField(context, canvas.width, canvas.height, documentModel, layers); if (hasCompositeFinish(documentModel.finish)) finishCanvas(context, canvas.width, canvas.height, documentModel.finish); return canvas; }
 export function pngFileName(name: string): string { return `${name.trim() || 'ezcomp'}.png`; }
-export async function exportPng(documentModel: CompositeDocument, layers: RasterLayer[]): Promise<void> { const canvas = renderDocumentToCanvas(documentModel, layers); const canvasBlob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('PNG export failed.')), 'image/png')), blob = await withPngDpi(canvasBlob, EXPORT_DPI); const url = URL.createObjectURL(blob), anchor = document.createElement('a'); anchor.href = url; anchor.download = pngFileName(documentModel.name); anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 0); }
+export type ExportFormat = 'png' | 'pdf' | 'ai';
+export function exportFileName(name: string, format: ExportFormat): string { return `${name.trim() || 'ezcomp'}.${format}`; }
+function downloadBlob(blob: Blob, fileName: string): void { const url = URL.createObjectURL(blob), anchor = document.createElement('a'); anchor.href = url; anchor.download = fileName; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 0); }
+export async function exportComposition(documentModel: CompositeDocument, layers: RasterLayer[], format: ExportFormat): Promise<void> {
+  const canvas = renderDocumentToCanvas(documentModel, layers);
+  if (format === 'png') { const canvasBlob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('PNG export failed.')), 'image/png')), blob = await withPngDpi(canvasBlob, EXPORT_DPI); downloadBlob(blob, exportFileName(documentModel.name, format)); return; }
+  const context = canvas.getContext('2d', { willReadFrequently: true }); if (!context) throw new Error('Canvas 2D is unavailable in this browser.');
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height), bytes = await createRasterPdf({ width: canvas.width, height: canvas.height, data: pixels.data }, EXPORT_DPI), buffer = new ArrayBuffer(bytes.byteLength); new Uint8Array(buffer).set(bytes);
+  downloadBlob(new Blob([buffer], { type: 'application/pdf' }), exportFileName(documentModel.name, format));
+}
+export async function exportPng(documentModel: CompositeDocument, layers: RasterLayer[]): Promise<void> { return exportComposition(documentModel, layers, 'png'); }

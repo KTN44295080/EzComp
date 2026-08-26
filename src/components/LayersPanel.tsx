@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element -- thumbnails are browser-local object/data URLs */
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderOpen, ImagePlus, Layers3, Lock, LockOpen, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Crop, Eye, EyeOff, Folder, FolderOpen, ImagePlus, Layers3, Lock, LockOpen, Trash2 } from 'lucide-react';
 import { isLayerEffectivelyVisible } from '../lib/renderer';
 import { useEditorStore } from '../store/editorStore';
 import type { RasterLayer } from '../types/editor';
@@ -24,7 +24,7 @@ export function LayersPanel({ onImport }: { onImport: () => void }) {
   const ordered = [...layers].reverse().filter((layer) => !hasCollapsedAncestor(layer, byId));
   const canReorder = Boolean(selectedLayer && selectedLayer.kind !== 'group' && !selectedLayer.parentId);
   return <aside className="panel panel--layers">
-    <div className="panel__header"><div><span className="panel__eyebrow">Composition</span><h2>Layers</h2></div><button className="icon-button" type="button" onClick={onImport} title="Import layer"><ImagePlus size={17}/></button></div>
+    <div className="panel__header"><div><span className="panel__eyebrow">Composition</span><h2>Layers</h2></div><div className="toolbar-group"><button className="icon-button" type="button" onClick={() => select(null)} title="Canvas crop and aspect ratio"><Crop size={17}/></button><button className="icon-button" type="button" onClick={onImport} title="Import layer"><ImagePlus size={17}/></button></div></div>
     <AutoCompositeControls compact/>
     <div className="layer-list">{layers.length === 0 ? <div className="panel-empty"><Layers3 size={28}/><strong>No layers yet</strong><span>Drop a PSD or image onto the canvas.</span><button type="button" className="text-button" onClick={onImport}>Choose files</button></div> : ordered.map((layer) => {
       const isGroup = layer.kind === 'group', effectiveVisible = isLayerEffectivelyVisible(layer, layers), inheritedHidden = layer.visible && !effectiveVisible;

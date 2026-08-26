@@ -9,6 +9,7 @@ interface EditorState {
   compareBefore: boolean; message: string; error: string | null;
   past: HistorySnapshot[]; future: HistorySnapshot[]; transactionBase: HistorySnapshot | null;
   setDocument: (patch: Partial<CompositeDocument>) => void;
+  cropCanvas: (width: number, height: number) => void;
   setFinish: (patch: Partial<CompositeFinish>) => void;
   setSceneLock: (patch: Partial<SceneLock>) => void;
   replaceProject: (document: CompositeDocument, layers: RasterLayer[], record?: boolean) => void;
@@ -45,6 +46,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   isImporting: false, isRestoring: true, compareBefore: false, message: 'Ready', error: null,
   past: [], future: [], transactionBase: null,
   setDocument: (patch) => set((state) => withHistory(state, { document: { ...state.document, ...patch } })),
+  cropCanvas: (width, height) => set((state) => { const nextWidth = Math.max(1, Math.min(state.document.width, Math.round(width))), nextHeight = Math.max(1, Math.min(state.document.height, Math.round(height))); if (nextWidth === state.document.width && nextHeight === state.document.height) return state; const shiftX = (nextWidth - state.document.width) / 2, shiftY = (nextHeight - state.document.height) / 2; return withHistory(state, { document: { ...state.document, width: nextWidth, height: nextHeight }, layers: state.layers.map((layer) => layer.kind === 'group' ? layer : { ...layer, transform: { ...layer.transform, x: layer.transform.x + shiftX, y: layer.transform.y + shiftY } }), message: `Canvas cropped to ${nextWidth} × ${nextHeight}` }); }),
   setFinish: (patch) => set((state) => withHistory(state, { document: { ...state.document, finish: { ...defaultFinish(), ...state.document.finish, ...patch } } })),
   setSceneLock: (patch) => set((state) => ({ document: { ...state.document, sceneLock: { ...defaultSceneLock(), ...state.document.sceneLock, ...patch } } })),
   replaceProject: (document, layers, record = true) => set((state) => ({

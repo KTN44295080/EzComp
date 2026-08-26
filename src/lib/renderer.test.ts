@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { hasCompositeFinish, hasSceneDepthOfField, isLayerEffectivelyVisible, pngFileName } from './renderer';
+import { exportFileName, hasCompositeFinish, hasSceneDepthOfField, isLayerEffectivelyVisible, pngFileName } from './renderer';
 import { defaultAdjustments, defaultDepthOfField, defaultFinish, defaultTransform, type RasterLayer } from '../types/editor';
 describe('PNG export naming', () => {
   it('uses the document name', () => expect(pngFileName('Composite 01')).toBe('Composite 01.png'));
   it('falls back for an empty name', () => expect(pngFileName('  ')).toBe('ezcomp.png'));
+  it('names PDF and AI-compatible exports', () => { expect(exportFileName('Composite 01', 'pdf')).toBe('Composite 01.pdf'); expect(exportFileName('Composite 01', 'ai')).toBe('Composite 01.ai'); });
 });
 
 describe('global finishing stack', () => {
