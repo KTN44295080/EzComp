@@ -48,6 +48,14 @@ export interface LayerTransform {
   rotation: number;
 }
 
+/** Non-destructive inset from each edge, measured in source-image pixels. */
+export interface LayerCrop {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 export interface LayerAdjustments {
   exposure: number;
   contrast: number;
@@ -114,6 +122,7 @@ export interface RasterLayer {
   locked: boolean;
   opacity: number;
   blendMode: BlendMode;
+  crop?: LayerCrop;
   transform: LayerTransform;
   adjustments: LayerAdjustments;
   depthOfField: DepthOfFieldSettings;
@@ -169,3 +178,5 @@ export const defaultDocument = (): CompositeDocument => ({
 export const defaultTransform = (): LayerTransform => ({
   x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0,
 });
+
+export const defaultLayerCrop = (): LayerCrop => ({ left: 0, top: 0, right: 0, bottom: 0 });

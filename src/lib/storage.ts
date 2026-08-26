@@ -1,5 +1,6 @@
 import { assetToBlob, clearAssets, restoreAsset } from './assets';
 import { defaultDepthOfField, defaultDocument, defaultFinish, defaultSceneLock, normalizeAdjustments, type CompositeDocument, type RasterLayer } from '../types/editor';
+import { normalizeLayerCrop } from './layerCrop';
 
 export const PROJECT_EXTENSION = '.ezcomp';
 const DB_NAME = 'ezcomp-local';
@@ -35,7 +36,7 @@ async function hydrate(project: StoredProject): Promise<ProjectSnapshot> {
   if (project.version !== 1 || !project.document || !Array.isArray(project.layers)) throw new Error('Unsupported EzComp project.');
   clearAssets();
   await Promise.all(Object.entries(project.assets).map(([id, blob]) => restoreAsset(id, blob)));
-  return { document: { ...defaultDocument(), ...project.document, sceneLock: { ...defaultSceneLock(), ...project.document.sceneLock }, finish: { ...defaultFinish(), ...project.document.finish } }, layers: project.layers.map((layer) => ({ ...layer, kind: layer.kind ?? 'raster', depth: layer.depth ?? 0, adjustments: normalizeAdjustments(layer.adjustments), depthOfField: { ...defaultDepthOfField(), ...layer.depthOfField } })) };
+  return { document: { ...defaultDocument(), ...project.document, sceneLock: { ...defaultSceneLock(), ...project.document.sceneLock }, finish: { ...defaultFinish(), ...project.document.finish } }, layers: project.layers.map((layer) => ({ ...layer, kind: layer.kind ?? 'raster', depth: layer.depth ?? 0, crop: layer.kind === 'group' ? undefined : normalizeLayerCrop(layer.crop, layer.width, layer.height), adjustments: normalizeAdjustments(layer.adjustments), depthOfField: { ...defaultDepthOfField(), ...layer.depthOfField } })) };
 }
 
 export async function saveAutosave(snapshot: ProjectSnapshot): Promise<void> {
