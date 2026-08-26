@@ -29,6 +29,8 @@ export interface DepthOfFieldSettings {
   enabled: boolean;
   depthMapAssetId: string | null;
   method: 'ai' | 'fast' | null;
+  /** Normalized scene distance for this layer. Null samples the backdrop at the layer's contact point. */
+  sceneDepth: number | null;
   focus: number;
   focusRange: number;
   maxBlur: number;
@@ -142,7 +144,7 @@ export const mvFinish = (): CompositeFinish => ({
 
 export const defaultDepthOfField = (): DepthOfFieldSettings => ({
   enabled: false, depthMapAssetId: null, method: null,
-  focus: 58, focusRange: 12, maxBlur: 18, invert: false,
+  sceneDepth: null, focus: 58, focusRange: 12, maxBlur: 18, invert: false,
 });
 
 export const defaultDocument = (): CompositeDocument => ({

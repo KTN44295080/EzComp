@@ -35,8 +35,9 @@ export function AutoCompositeControls({ compact = false }: { compact?: boolean }
       const sharedMatch = lockMatches ? sceneLock.adjustments : pickSharedMatchAdjustments(generated);
       if (lockActive && !lockMatches) setSceneLock({ enabled: true, preset, referenceId: activeReferenceId, scope, sourceLayerId: selectedId, sourceLayerName: selected.name, adjustments: sharedMatch });
       patchAdjustments(selectedId, { ...generated, ...(lockActive ? sharedMatch : {}), ...pickLightingAdjustments(selected.adjustments) });
+      patchDepth(selectedId, { sceneDepth: generated.occlusionDepth });
       if (documentModel.finish.diffusion === 0 && documentModel.finish.bloom === 0 && documentModel.finish.vignette === 0) setFinish(mvFinish());
-      setMessage(lockActive ? `${autoCompositeLabels[preset]} applied with shared Scene Lock and scene geometry` : `${autoCompositeLabels[preset]} adaptive auto composite and scene geometry applied`);
+      setMessage(lockActive ? `${autoCompositeLabels[preset]} applied with Scene Lock, shared DoF, and scene geometry` : `${autoCompositeLabels[preset]} adaptive composite with shared DoF applied`);
     }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Auto composite failed.'); setMessage('Auto composite could not be applied'); }
     finally { setBusy(false); }

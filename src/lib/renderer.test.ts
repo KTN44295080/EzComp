@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasCompositeFinish, isLayerEffectivelyVisible, pngFileName } from './renderer';
+import { hasCompositeFinish, hasSceneDepthOfField, isLayerEffectivelyVisible, pngFileName } from './renderer';
 import { defaultAdjustments, defaultDepthOfField, defaultFinish, defaultTransform, type RasterLayer } from '../types/editor';
 describe('PNG export naming', () => {
   it('uses the document name', () => expect(pngFileName('Composite 01')).toBe('Composite 01.png'));
@@ -29,5 +29,14 @@ describe('layer visibility inheritance', () => {
     const group = layer('group', { kind: 'group', assetId: '', visible: true });
     const child = layer('child', { parentId: group.id, visible: false });
     expect(isLayerEffectivelyVisible(child, [child, group])).toBe(false);
+  });
+});
+
+describe('shared scene depth of field', () => {
+  it('is controlled only by the bottom visible backdrop', () => {
+    const backdrop = layer('backdrop', { depthOfField: { ...defaultDepthOfField(), enabled: true, depthMapAssetId: 'depth-map' } });
+    const character = layer('character', { depthOfField: { ...defaultDepthOfField(), enabled: true, depthMapAssetId: 'character-depth' } });
+    expect(hasSceneDepthOfField([backdrop, character])).toBe(true);
+    expect(hasSceneDepthOfField([layer('plain'), character])).toBe(false);
   });
 });

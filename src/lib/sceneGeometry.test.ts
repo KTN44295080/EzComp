@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { depthOcclusionWeight, groundDepthWeight, projectedShadowMatrix } from './sceneGeometry';
+import { depthBandWeights, depthOcclusionWeight, groundDepthWeight, normalizedDepthBlur, projectedShadowMatrix } from './sceneGeometry';
 
 describe('depth-aware scene geometry', () => {
   it('restores only depth pixels in front of the subject plane', () => {
@@ -16,5 +16,14 @@ describe('depth-aware scene geometry', () => {
     const matrix = projectedShadowMatrix({ footX: 400, footY: 300, localFootX: 50, localFootY: 100, directionDegrees: 135, widthScale: .6, lengthScale: .4 });
     expect(matrix.a * 50 + matrix.c * 100 + matrix.e).toBeCloseTo(400);
     expect(matrix.b * 50 + matrix.d * 100 + matrix.f).toBeCloseTo(300);
+  });
+
+  it('interpolates depth blur continuously without an alpha gap', () => {
+    expect(normalizedDepthBlur(.58, 58, 12)).toBe(0);
+    expect(normalizedDepthBlur(0, 58, 12)).toBeGreaterThan(.9);
+    for (const amount of [0, .1, .25, .5, .73, 1]) {
+      const weights = depthBandWeights(amount, 12);
+      expect(weights.lowerWeight + weights.upperWeight).toBe(255);
+    }
   });
 });

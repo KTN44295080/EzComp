@@ -1,6 +1,6 @@
 import { getAsset } from './assets';
 import { applyAdjustmentsToImageData, hasPixelAdjustments } from './colorMath';
-import { depthOcclusionWeight, groundDepthWeight, projectedShadowMatrix } from './sceneGeometry';
+import { depthBandWeights, depthOcclusionWeight, groundDepthWeight, normalizedDepthBlur, projectedShadowMatrix } from './sceneGeometry';
 import { defaultDepthOfField, defaultFinish, type CompositeDocument, type CompositeFinish, type RasterLayer } from '../types/editor';
 
 const rasterCache = new Map<string, { key: string; canvas: HTMLCanvasElement }>();
@@ -8,7 +8,6 @@ const shadowCache = new Map<string, HTMLCanvasElement>();
 const wrapCache = new Map<string, HTMLCanvasElement>();
 const occlusionCache = new Map<string, HTMLCanvasElement>();
 const projectedShadowCache = new Map<string, HTMLCanvasElement>();
-const depthBlurCache = new Map<string, { key: string; canvas: HTMLCanvasElement }>();
 const boundsCache = new Map<string, { left: number; top: number; right: number; bottom: number }>();
 let checker: HTMLCanvasElement | undefined;
 let finishGrain: HTMLCanvasElement | undefined;
@@ -36,36 +35,6 @@ function adjustedRaster(layer: RasterLayer): CanvasImageSource | undefined {
   if (blur) { const blurred = createCanvas(layer.width, layer.height), blurContext = blurred.getContext('2d'); if (blurContext) { blurContext.filter = `blur(${layer.adjustments.blur}px)`; blurContext.drawImage(working, 0, 0); result = blurred; } }
   rasterCache.set(layer.id, { key, canvas: result }); return result;
 }
-function depthAwareRaster(layer: RasterLayer, source: CanvasImageSource): CanvasImageSource {
-  const settings = { ...defaultDepthOfField(), ...layer.depthOfField };
-  if (!settings.enabled || !settings.depthMapAssetId || settings.maxBlur <= 0) return source;
-  const depth = getAsset(settings.depthMapAssetId); if (!depth) return source;
-  const key = `${layer.assetId}:${Object.values(layer.adjustments).join(':')}:${Object.values(settings).join(':')}`, cached = depthBlurCache.get(layer.id);
-  if (cached?.key === key) return cached.canvas;
-  const renderScale = Math.min(1, 2560 / Math.max(layer.width, layer.height)), width = Math.max(1, Math.round(layer.width * renderScale)), height = Math.max(1, Math.round(layer.height * renderScale));
-  const base = createCanvas(width, height), baseContext = base.getContext('2d'); if (!baseContext) return source;
-  baseContext.imageSmoothingEnabled = true; baseContext.imageSmoothingQuality = 'high'; baseContext.drawImage(source, 0, 0, width, height);
-  const depthCanvas = createCanvas(width, height), depthContext = depthCanvas.getContext('2d', { willReadFrequently: true }); if (!depthContext) return source;
-  depthContext.imageSmoothingEnabled = true; depthContext.imageSmoothingQuality = 'high'; depthContext.drawImage(depth.source, 0, 0, width, height);
-  const depthPixels = depthContext.getImageData(0, 0, width, height).data, bandCount = 6, masks = Array.from({ length: bandCount }, () => new Uint8ClampedArray(width * height));
-  const focus = settings.focus / 100, halfRange = settings.focusRange / 200, available = Math.max(.01, Math.max(focus, 1 - focus) - halfRange);
-  for (let pixel = 0; pixel < width * height; pixel += 1) {
-    const sampled = (depthPixels[pixel * 4] ?? 0) / 255, value = settings.invert ? 1 - sampled : sampled;
-    const distance = Math.max(0, Math.abs(value - focus) - halfRange) / available, normalizedBlur = Math.min(1, distance * distance * (3 - 2 * distance));
-    const position = normalizedBlur * (bandCount - 1), lower = Math.floor(position), upper = Math.min(bandCount - 1, lower + 1), fraction = position - lower;
-    masks[lower]![pixel] = Math.round((1 - fraction) * 255); masks[upper]![pixel] = Math.min(255, (masks[upper]![pixel] ?? 0) + Math.round(fraction * 255));
-  }
-  const result = createCanvas(width, height), resultContext = result.getContext('2d'); if (!resultContext) return source;
-  const transformScale = Math.max(.02, Math.min(Math.abs(layer.transform.scaleX), Math.abs(layer.transform.scaleY)));
-  for (let band = 0; band < bandCount; band += 1) {
-    const amount = band / (bandCount - 1), filtered = createCanvas(width, height), filteredContext = filtered.getContext('2d'); if (!filteredContext) continue;
-    if (band === 0) filteredContext.drawImage(base, 0, 0); else { filteredContext.filter = `blur(${settings.maxBlur * amount * renderScale / transformScale}px)`; filteredContext.drawImage(base, 0, 0); }
-    const maskCanvas = createCanvas(width, height), maskContext = maskCanvas.getContext('2d'); if (!maskContext) continue; const maskData = maskContext.createImageData(width, height), weights = masks[band]!;
-    for (let pixel = 0; pixel < weights.length; pixel += 1) { const offset = pixel * 4; maskData.data[offset] = 255; maskData.data[offset + 1] = 255; maskData.data[offset + 2] = 255; maskData.data[offset + 3] = weights[pixel] ?? 0; }
-    maskContext.putImageData(maskData, 0, 0); filteredContext.globalCompositeOperation = 'destination-in'; filteredContext.drawImage(maskCanvas, 0, 0); resultContext.drawImage(filtered, 0, 0);
-  }
-  depthBlurCache.set(layer.id, { key, canvas: result }); return result;
-}
 function shadowRaster(layer: RasterLayer): HTMLCanvasElement | undefined {
   const cached = shadowCache.get(layer.assetId); if (cached) return cached;
   const asset = getAsset(layer.assetId); if (!asset) return undefined;
@@ -82,7 +51,7 @@ function wrapRaster(layer: RasterLayer): HTMLCanvasElement | undefined {
 }
 function pixelWrapRaster(layer: RasterLayer, backdrop: RasterLayer): HTMLCanvasElement | undefined {
   const key = `pixels:${layer.assetId}:${backdrop.assetId}:${Object.values(layer.transform).join(':')}:${Object.values(backdrop.transform).join(':')}:${Object.values(backdrop.adjustments).join(':')}:${Object.values(backdrop.depthOfField ?? {}).join(':')}:${layer.adjustments.lightWrapRadius}`, cached = wrapCache.get(key); if (cached) return cached;
-  const mask = shadowRaster(layer), adjustedBackdrop = adjustedRaster(backdrop), backdropSource = adjustedBackdrop ? depthAwareRaster(backdrop, adjustedBackdrop) : undefined; if (!mask || !backdropSource) return undefined;
+  const mask = shadowRaster(layer), backdropSource = adjustedRaster(backdrop); if (!mask || !backdropSource) return undefined;
   const sampled = createCanvas(mask.width, mask.height), sampledContext = sampled.getContext('2d'); if (!sampledContext) return undefined;
   drawBackdropInLayerSpace(sampledContext, layer, backdrop, backdropSource, mask.width, mask.height);
   const softened = createCanvas(mask.width, mask.height), softenedContext = softened.getContext('2d'); if (!softenedContext) return undefined; const resolutionScale = mask.width / layer.width;
@@ -97,7 +66,7 @@ function depthOcclusionRaster(layer: RasterLayer, backdrop: RasterLayer): HTMLCa
   const depthId = backdrop.depthOfField?.depthMapAssetId, depth = depthId ? getAsset(depthId) : undefined;
   if (!depth || layer.adjustments.occlusionOpacity <= 0) return undefined;
   const key = `${layer.assetId}:${backdrop.assetId}:${depthId}:${Object.values(layer.transform).join(':')}:${Object.values(backdrop.transform).join(':')}:${Object.values(backdrop.adjustments).join(':')}:${Object.values(backdrop.depthOfField).join(':')}:${layer.adjustments.occlusionDepth}:${layer.adjustments.occlusionSoftness}`, cached = occlusionCache.get(key); if (cached) return cached;
-  const subjectMask = shadowRaster(layer), adjustedBackdrop = adjustedRaster(backdrop), backdropSource = adjustedBackdrop ? depthAwareRaster(backdrop, adjustedBackdrop) : undefined; if (!subjectMask || !backdropSource) return undefined;
+  const subjectMask = shadowRaster(layer), backdropSource = adjustedRaster(backdrop); if (!subjectMask || !backdropSource) return undefined;
   const width = subjectMask.width, height = subjectMask.height, sampledColor = createCanvas(width, height), colorContext = sampledColor.getContext('2d'), sampledDepth = createCanvas(width, height), depthContext = sampledDepth.getContext('2d', { willReadFrequently: true }), maskContext = subjectMask.getContext('2d', { willReadFrequently: true });
   if (!colorContext || !depthContext || !maskContext) return undefined;
   drawBackdropInLayerSpace(colorContext, layer, backdrop, backdropSource, width, height); drawBackdropInLayerSpace(depthContext, layer, backdrop, depth.source, width, height);
@@ -137,7 +106,7 @@ function visibleBounds(layer: RasterLayer): { left: number; top: number; right: 
   const bounds = { left: minX * scaleX, top: minY * scaleY, right: (maxX + 1) * scaleX, bottom: (maxY + 1) * scaleY };
   boundsCache.set(layer.assetId, bounds); return bounds;
 }
-export function clearRasterCache(): void { rasterCache.clear(); shadowCache.clear(); wrapCache.clear(); occlusionCache.clear(); projectedShadowCache.clear(); depthBlurCache.clear(); boundsCache.clear(); }
+export function clearRasterCache(): void { rasterCache.clear(); shadowCache.clear(); wrapCache.clear(); occlusionCache.clear(); projectedShadowCache.clear(); boundsCache.clear(); }
 export function isLayerEffectivelyVisible(layer: RasterLayer, layers: RasterLayer[]): boolean {
   if (!layer.visible) return false;
   const byId = new Map(layers.map((candidate) => [candidate.id, candidate]));
@@ -157,7 +126,7 @@ export function drawComposition(context: CanvasRenderingContext2D, documentModel
   context.save(); context.beginPath(); context.rect(0, 0, documentModel.width, documentModel.height); context.clip();
   for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
     const layer = layers[layerIndex]!;
-    if (layer.kind === 'group' || !isLayerEffectivelyVisible(layer, layers) || layer.opacity <= 0) continue; const adjusted = adjustedRaster(layer); if (!adjusted) continue; const source = depthAwareRaster(layer, adjusted);
+    if (layer.kind === 'group' || !isLayerEffectivelyVisible(layer, layers) || layer.opacity <= 0) continue; const source = adjustedRaster(layer); if (!source) continue;
     const { transform } = layer, centerX = transform.x + layer.width * transform.scaleX / 2, centerY = transform.y + layer.height * transform.scaleY / 2, backdrop = backdropBelow(layers, layerIndex);
     if (layer.adjustments.shadowOpacity > 0) {
       const projection = projectedGroundShadow(documentModel, layer, backdrop), bounds = visibleBounds(layer);
@@ -175,6 +144,62 @@ export function drawComposition(context: CanvasRenderingContext2D, documentModel
     if (occlusion) { context.save(); context.globalAlpha = layer.opacity / 100 * layer.adjustments.occlusionOpacity / 100; context.globalCompositeOperation = 'source-over'; context.translate(centerX, centerY); context.rotate(transform.rotation * Math.PI / 180); context.scale(transform.scaleX, transform.scaleY); context.drawImage(occlusion, -layer.width / 2, -layer.height / 2, layer.width, layer.height); context.restore(); }
   }
   context.restore();
+}
+function sceneDepthBackdrop(layers: RasterLayer[]): RasterLayer | undefined {
+  return layers.find((layer) => layer.kind !== 'group' && isLayerEffectivelyVisible(layer, layers) && layer.opacity > 0);
+}
+export function hasSceneDepthOfField(layers: RasterLayer[]): boolean {
+  const backdrop = sceneDepthBackdrop(layers), settings = backdrop ? { ...defaultDepthOfField(), ...backdrop.depthOfField } : undefined;
+  return Boolean(settings?.enabled && settings.depthMapAssetId && settings.maxBlur > 0);
+}
+function drawLayerInOutputSpace(context: CanvasRenderingContext2D, documentModel: CompositeDocument, layer: RasterLayer, source: CanvasImageSource, outputWidth: number, outputHeight: number): void {
+  const centerX = layer.transform.x + layer.width * layer.transform.scaleX / 2, centerY = layer.transform.y + layer.height * layer.transform.scaleY / 2;
+  context.save(); context.scale(outputWidth / documentModel.width, outputHeight / documentModel.height); context.translate(centerX, centerY); context.rotate(layer.transform.rotation * Math.PI / 180); context.scale(layer.transform.scaleX, layer.transform.scaleY); context.drawImage(source, -layer.width / 2, -layer.height / 2, layer.width, layer.height); context.restore();
+}
+function sampleDepthAtContact(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement, documentModel: CompositeDocument, layer: RasterLayer): number {
+  const bounds = visibleBounds(layer), localX = bounds ? (bounds.left + bounds.right) / 2 : layer.width / 2, localY = bounds?.bottom ?? layer.height, point = layerPointToDocument(layer, localX, localY), centerX = Math.round(point.x / documentModel.width * canvas.width), centerY = Math.round(point.y / documentModel.height * canvas.height);
+  let sum = 0, count = 0;
+  for (let y = -2; y <= 2; y += 1) for (let x = -2; x <= 2; x += 1) { const sampleX = Math.max(0, Math.min(canvas.width - 1, centerX + x)), sampleY = Math.max(0, Math.min(canvas.height - 1, centerY + y)), pixel = context.getImageData(sampleX, sampleY, 1, 1).data; if ((pixel[3] ?? 0) > 0) { sum += pixel[0] ?? 128; count += 1; } }
+  return count ? sum / count / 255 : .5;
+}
+function sceneDepthMap(documentModel: CompositeDocument, layers: RasterLayer[], backdrop: RasterLayer, width: number, height: number): HTMLCanvasElement | undefined {
+  const settings = { ...defaultDepthOfField(), ...backdrop.depthOfField }, depth = settings.depthMapAssetId ? getAsset(settings.depthMapAssetId) : undefined; if (!depth) return undefined;
+  const canvas = createCanvas(width, height), context = canvas.getContext('2d', { willReadFrequently: true }); if (!context) return undefined;
+  const fallback = Math.round(settings.focus / 100 * 255); context.fillStyle = `rgb(${fallback} ${fallback} ${fallback})`; context.fillRect(0, 0, width, height); drawLayerInOutputSpace(context, documentModel, backdrop, depth.source, width, height);
+  const normalized = context.getImageData(0, 0, width, height);
+  for (let offset = 0; offset < normalized.data.length; offset += 4) { const raw = normalized.data[offset] ?? fallback, value = settings.invert ? 255 - raw : raw; normalized.data[offset] = value; normalized.data[offset + 1] = value; normalized.data[offset + 2] = value; normalized.data[offset + 3] = 255; }
+  context.putImageData(normalized, 0, 0);
+  const backdropMap = createCanvas(width, height), backdropContext = backdropMap.getContext('2d', { willReadFrequently: true }); if (!backdropContext) return undefined; backdropContext.drawImage(canvas, 0, 0);
+  for (const layer of layers) {
+    if (layer.id === backdrop.id || layer.kind === 'group' || !isLayerEffectivelyVisible(layer, layers) || layer.opacity <= 0) continue;
+    const mask = shadowRaster(layer); if (!mask) continue;
+    const manual = layer.depthOfField?.sceneDepth, layerDepth = manual === null || manual === undefined ? sampleDepthAtContact(backdropContext, backdropMap, documentModel, layer) : Math.max(0, Math.min(1, manual / 100)), value = Math.round(layerDepth * 255);
+    const plane = createCanvas(mask.width, mask.height), planeContext = plane.getContext('2d'); if (!planeContext) continue; planeContext.drawImage(mask, 0, 0); planeContext.globalCompositeOperation = 'source-in'; planeContext.fillStyle = `rgb(${value} ${value} ${value})`; planeContext.fillRect(0, 0, plane.width, plane.height);
+    context.globalAlpha = layer.opacity / 100; drawLayerInOutputSpace(context, documentModel, layer, plane, width, height); context.globalAlpha = 1;
+  }
+  return canvas;
+}
+function sceneDepthOfField(context: CanvasRenderingContext2D, width: number, height: number, documentModel: CompositeDocument, layers: RasterLayer[]): void {
+  const backdrop = sceneDepthBackdrop(layers), settings = backdrop ? { ...defaultDepthOfField(), ...backdrop.depthOfField } : undefined; if (!backdrop || !settings?.enabled || !settings.depthMapAssetId || settings.maxBlur <= 0) return;
+  const renderScale = Math.min(1, 2048 / Math.max(width, height)), lowWidth = Math.max(1, Math.round(width * renderScale)), lowHeight = Math.max(1, Math.round(height * renderScale)), depthPixelScale = Math.min(lowWidth / documentModel.width, lowHeight / documentModel.height), base = createCanvas(lowWidth, lowHeight), baseContext = base.getContext('2d'); if (!baseContext) return;
+  baseContext.imageSmoothingEnabled = true; baseContext.imageSmoothingQuality = 'high'; baseContext.drawImage(context.canvas, 0, 0, width, height, 0, 0, lowWidth, lowHeight);
+  const depthCanvas = sceneDepthMap(documentModel, layers, backdrop, lowWidth, lowHeight), depthContext = depthCanvas?.getContext('2d', { willReadFrequently: true }); if (!depthCanvas || !depthContext) return;
+  const depthPixels = depthContext.getImageData(0, 0, lowWidth, lowHeight).data, bandCount = 12, masks = Array.from({ length: bandCount }, () => new Uint8ClampedArray(lowWidth * lowHeight)), blendMask = new Uint8ClampedArray(lowWidth * lowHeight);
+  for (let pixel = 0; pixel < lowWidth * lowHeight; pixel += 1) {
+    const amount = normalizedDepthBlur((depthPixels[pixel * 4] ?? 0) / 255, settings.focus, settings.focusRange), weights = depthBandWeights(amount, bandCount); masks[weights.lower]![pixel] = weights.lowerWeight; if (weights.upperWeight > 0) masks[weights.upper]![pixel] = weights.upperWeight;
+    const transition = Math.min(1, amount / .08); blendMask[pixel] = Math.round(transition * transition * (3 - 2 * transition) * 255);
+  }
+  const result = createCanvas(lowWidth, lowHeight), resultContext = result.getContext('2d'); if (!resultContext) return; resultContext.globalCompositeOperation = 'lighter';
+  for (let band = 0; band < bandCount; band += 1) {
+    const filtered = createCanvas(lowWidth, lowHeight), filteredContext = filtered.getContext('2d'); if (!filteredContext) continue;
+    if (band === 0) filteredContext.drawImage(base, 0, 0); else { filteredContext.filter = `blur(${settings.maxBlur * band / (bandCount - 1) * depthPixelScale}px)`; filteredContext.drawImage(base, 0, 0); }
+    const maskCanvas = createCanvas(lowWidth, lowHeight), maskContext = maskCanvas.getContext('2d'); if (!maskContext) continue; const maskData = maskContext.createImageData(lowWidth, lowHeight), bandMask = masks[band]!;
+    for (let pixel = 0; pixel < bandMask.length; pixel += 1) { const offset = pixel * 4; maskData.data[offset] = 255; maskData.data[offset + 1] = 255; maskData.data[offset + 2] = 255; maskData.data[offset + 3] = bandMask[pixel] ?? 0; }
+    maskContext.putImageData(maskData, 0, 0); filteredContext.globalCompositeOperation = 'destination-in'; filteredContext.drawImage(maskCanvas, 0, 0); resultContext.drawImage(filtered, 0, 0);
+  }
+  const blendCanvas = createCanvas(lowWidth, lowHeight), blendContext = blendCanvas.getContext('2d'); if (!blendContext) return; const blendData = blendContext.createImageData(lowWidth, lowHeight);
+  for (let pixel = 0; pixel < blendMask.length; pixel += 1) { const offset = pixel * 4; blendData.data[offset] = 255; blendData.data[offset + 1] = 255; blendData.data[offset + 2] = 255; blendData.data[offset + 3] = blendMask[pixel] ?? 0; }
+  blendContext.putImageData(blendData, 0, 0); resultContext.globalCompositeOperation = 'destination-in'; resultContext.drawImage(blendCanvas, 0, 0); context.save(); context.globalCompositeOperation = 'source-over'; context.drawImage(result, 0, 0, width, height); context.restore();
 }
 function checkerCanvas(): HTMLCanvasElement { if (checker) return checker; checker = createCanvas(32, 32); const c = checker.getContext('2d'); if (c) { c.fillStyle = '#eceef2'; c.fillRect(0, 0, 32, 32); c.fillStyle = '#d3d6dc'; c.fillRect(0, 0, 16, 16); c.fillRect(16, 16, 16, 16); } return checker; }
 export function drawDocumentSurface(context: CanvasRenderingContext2D, documentModel: CompositeDocument): void { context.save(); context.shadowColor = 'rgba(0,0,0,.55)'; context.shadowBlur = 28; context.shadowOffsetY = 10; context.fillStyle = '#fff'; context.fillRect(0, 0, documentModel.width, documentModel.height); context.restore(); const pattern = context.createPattern(checkerCanvas(), 'repeat'); if (pattern) { context.fillStyle = pattern; context.fillRect(0, 0, documentModel.width, documentModel.height); } }
@@ -199,9 +224,10 @@ function finishCanvas(context: CanvasRenderingContext2D, width: number, height: 
 export function renderPreviewComposition(documentModel: CompositeDocument, layers: RasterLayer[], maxEdge = 2560): HTMLCanvasElement {
   const scale = Math.min(1, maxEdge / Math.max(documentModel.width, documentModel.height)), canvas = createCanvas(documentModel.width * scale, documentModel.height * scale), context = canvas.getContext('2d'); if (!context) throw new Error('Canvas 2D is unavailable in this browser.');
   context.scale(scale, scale); drawComposition(context, documentModel, layers); context.setTransform(1, 0, 0, 1, 0, 0);
+  sceneDepthOfField(context, canvas.width, canvas.height, documentModel, layers);
   if (hasCompositeFinish(documentModel.finish)) finishCanvas(context, canvas.width, canvas.height, { ...documentModel.finish, diffusionRadius: documentModel.finish.diffusionRadius * scale, bloomRadius: documentModel.finish.bloomRadius * scale });
   return canvas;
 }
-export function renderDocumentToCanvas(documentModel: CompositeDocument, layers: RasterLayer[]): HTMLCanvasElement { const canvas = createCanvas(documentModel.width, documentModel.height), context = canvas.getContext('2d'); if (!context) throw new Error('Canvas 2D is unavailable in this browser.'); drawComposition(context, documentModel, layers); if (hasCompositeFinish(documentModel.finish)) finishCanvas(context, canvas.width, canvas.height, documentModel.finish); return canvas; }
+export function renderDocumentToCanvas(documentModel: CompositeDocument, layers: RasterLayer[]): HTMLCanvasElement { const canvas = createCanvas(documentModel.width, documentModel.height), context = canvas.getContext('2d'); if (!context) throw new Error('Canvas 2D is unavailable in this browser.'); drawComposition(context, documentModel, layers); sceneDepthOfField(context, canvas.width, canvas.height, documentModel, layers); if (hasCompositeFinish(documentModel.finish)) finishCanvas(context, canvas.width, canvas.height, documentModel.finish); return canvas; }
 export function pngFileName(name: string): string { return `${name.trim() || 'ezcomp'}.png`; }
 export async function exportPng(documentModel: CompositeDocument, layers: RasterLayer[]): Promise<void> { const canvas = renderDocumentToCanvas(documentModel, layers); const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('PNG export failed.')), 'image/png')); const url = URL.createObjectURL(blob), anchor = document.createElement('a'); anchor.href = url; anchor.download = pngFileName(documentModel.name); anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 0); }

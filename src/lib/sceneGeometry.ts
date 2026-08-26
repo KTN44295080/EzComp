@@ -16,6 +16,19 @@ export function groundDepthWeight(depth: number, footDepth: number): number {
   return (1 - smoothstep(.07, .24, nearer)) * (1 - smoothstep(.28, .62, farther));
 }
 
+export function normalizedDepthBlur(depth: number, focus: number, focusRange: number): number {
+  const normalizedFocus = clamp(focus / 100), halfRange = clamp(focusRange / 200), available = Math.max(.01, Math.max(normalizedFocus, 1 - normalizedFocus) - halfRange);
+  const distance = clamp((Math.abs(clamp(depth) - normalizedFocus) - halfRange) / available);
+  return distance * distance * (3 - 2 * distance);
+}
+
+export function depthBandWeights(amount: number, bandCount: number): { lower: number; upper: number; lowerWeight: number; upperWeight: number } {
+  const count = Math.max(2, Math.floor(bandCount)), position = clamp(amount) * (count - 1), lower = Math.floor(position), upper = Math.min(count - 1, lower + 1);
+  if (lower === upper) return { lower, upper, lowerWeight: 255, upperWeight: 0 };
+  const upperWeight = Math.round((position - lower) * 255);
+  return { lower, upper, lowerWeight: 255 - upperWeight, upperWeight };
+}
+
 export function projectedShadowMatrix(input: {
   footX: number; footY: number; localFootX: number; localFootY: number;
   directionDegrees: number; widthScale: number; lengthScale: number;
