@@ -74,6 +74,9 @@ export interface LayerAdjustments {
   occlusionOpacity: number;
   occlusionDepth: number;
   occlusionSoftness: number;
+  ambientOcclusion: number;
+  ambientOcclusionRadius: number;
+  ambientOcclusionDepthRange: number;
   atmosphere: number;
   grain: number;
   shadowProjection: number;
@@ -125,9 +128,16 @@ export const defaultAdjustments = (): LayerAdjustments => ({
   upperBodyLight: 0, rimLight: 0,
   environmentColor: '#8aa9c8', lightWrap: 0, lightWrapRadius: 12,
   occlusionOpacity: 0, occlusionDepth: 55, occlusionSoftness: 18,
+  ambientOcclusion: 0, ambientOcclusionRadius: 18, ambientOcclusionDepthRange: 30,
   atmosphere: 0, grain: 0,
   shadowProjection: 0, shadowLength: 42,
 });
+
+export const normalizeAdjustments = (value?: Partial<LayerAdjustments>): LayerAdjustments => {
+  const normalized = { ...defaultAdjustments(), ...value };
+  if (value?.ambientOcclusion === undefined && ((value?.lightWrap ?? 0) > 0 || (value?.shadowOpacity ?? 0) > 0)) normalized.ambientOcclusion = 22;
+  return normalized;
+};
 
 export const defaultSceneLock = (): SceneLock => ({
   enabled: true, preset: null, referenceId: null, scope: null,

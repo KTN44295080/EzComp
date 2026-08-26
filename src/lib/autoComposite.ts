@@ -57,11 +57,11 @@ const colorHex = (red: number, green: number, blue: number): string => `#${[red,
 
 export function deriveAutoAdjustments(foreground: ImageStats, reference: ImageStats, preset: AutoCompositePreset): LayerAdjustments {
   const settings = {
-    balanced: { strength: .9, exposure: 0, contrast: 0, saturation: 0, temperature: 0, shadow: 35, wrap: 40, atmosphere: 10, grain: 8, projection: 68, length: 42, occlusion: 70, upper: 12, rim: 10 },
-    cinematic: { strength: .82, exposure: -.08, contrast: 14, saturation: -8, temperature: -5, shadow: 42, wrap: 46, atmosphere: 12, grain: 10, projection: 78, length: 58, occlusion: 78, upper: 14, rim: 15 },
-    soft: { strength: .72, exposure: .04, contrast: -12, saturation: -7, temperature: 2, shadow: 28, wrap: 36, atmosphere: 14, grain: 5, projection: 48, length: 34, occlusion: 60, upper: 15, rim: 8 },
-    night: { strength: .96, exposure: -.42, contrast: 8, saturation: -14, temperature: -22, shadow: 46, wrap: 50, atmosphere: 16, grain: 11, projection: 82, length: 66, occlusion: 82, upper: 8, rim: 18 },
-    vivid: { strength: .75, exposure: 0, contrast: 10, saturation: 16, temperature: 3, shadow: 34, wrap: 38, atmosphere: 8, grain: 8, projection: 62, length: 40, occlusion: 68, upper: 10, rim: 12 },
+    balanced: { strength: .9, exposure: 0, contrast: 0, saturation: 0, temperature: 0, shadow: 35, wrap: 40, atmosphere: 10, grain: 8, projection: 68, length: 42, occlusion: 70, ao: 22, aoRadius: 18, upper: 12, rim: 10 },
+    cinematic: { strength: .82, exposure: -.08, contrast: 14, saturation: -8, temperature: -5, shadow: 42, wrap: 46, atmosphere: 12, grain: 10, projection: 78, length: 58, occlusion: 78, ao: 28, aoRadius: 16, upper: 14, rim: 15 },
+    soft: { strength: .72, exposure: .04, contrast: -12, saturation: -7, temperature: 2, shadow: 28, wrap: 36, atmosphere: 14, grain: 5, projection: 48, length: 34, occlusion: 60, ao: 14, aoRadius: 24, upper: 15, rim: 8 },
+    night: { strength: .96, exposure: -.42, contrast: 8, saturation: -14, temperature: -22, shadow: 46, wrap: 50, atmosphere: 16, grain: 11, projection: 82, length: 66, occlusion: 82, ao: 32, aoRadius: 18, upper: 8, rim: 18 },
+    vivid: { strength: .75, exposure: 0, contrast: 10, saturation: 16, temperature: 3, shadow: 34, wrap: 38, atmosphere: 8, grain: 8, projection: 62, length: 40, occlusion: 68, ao: 20, aoRadius: 15, upper: 10, rim: 12 },
   }[preset];
   const matchExposure = Math.log2((reference.luminance + .018) / (foreground.luminance + .018));
   const exposure = clamp(matchExposure * settings.strength + settings.exposure, -2.5, 2.5), exposureGain = 2 ** exposure;
@@ -84,6 +84,8 @@ export function deriveAutoAdjustments(foreground: ImageStats, reference: ImageSt
     environmentColor: colorHex(reference.red, reference.green, reference.blue),
     lightWrap: settings.wrap,
     occlusionOpacity: settings.occlusion,
+    ambientOcclusion: settings.ao,
+    ambientOcclusionRadius: settings.aoRadius,
     upperBodyLight: settings.upper,
     rimLight: settings.rim,
     atmosphere: settings.atmosphere,

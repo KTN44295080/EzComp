@@ -16,6 +16,11 @@ export function groundDepthWeight(depth: number, footDepth: number): number {
   return (1 - smoothstep(.07, .24, nearer)) * (1 - smoothstep(.28, .62, farther));
 }
 
+export function ambientOcclusionDepthWeight(depth: number, subjectDepth: number, range: number): number {
+  const threshold = .025 + clamp(range / 100) * .48;
+  return 1 - smoothstep(threshold * .55, threshold, Math.abs(clamp(depth) - clamp(subjectDepth)));
+}
+
 export function normalizedDepthBlur(depth: number, focus: number, focusRange: number): number {
   const normalizedFocus = clamp(focus / 100), halfRange = clamp(focusRange / 200), available = Math.max(.01, Math.max(normalizedFocus, 1 - normalizedFocus) - halfRange);
   const distance = clamp((Math.abs(clamp(depth) - normalizedFocus) - halfRange) / available);

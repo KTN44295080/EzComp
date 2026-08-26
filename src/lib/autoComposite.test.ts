@@ -11,6 +11,7 @@ describe('auto composite adjustment model', () => {
     expect(result.shadowProjection).toBeGreaterThan(0);
     expect(result.lightWrap).toBeGreaterThan(0);
     expect(result.occlusionOpacity).toBeGreaterThan(0);
+    expect(result.ambientOcclusion).toBeGreaterThan(0);
     expect(result.grain).toBeGreaterThan(0);
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { depthBandWeights, depthOcclusionWeight, groundDepthWeight, normalizedDepthBlur, projectedShadowMatrix } from './sceneGeometry';
+import { ambientOcclusionDepthWeight, depthBandWeights, depthOcclusionWeight, groundDepthWeight, normalizedDepthBlur, projectedShadowMatrix } from './sceneGeometry';
 
 describe('depth-aware scene geometry', () => {
   it('restores only depth pixels in front of the subject plane', () => {
@@ -10,6 +10,11 @@ describe('depth-aware scene geometry', () => {
   it('keeps the ground near the sampled foot depth and rejects nearer occluders', () => {
     expect(groundDepthWeight(.5, .5)).toBeGreaterThan(.95);
     expect(groundDepthWeight(.85, .5)).toBeLessThan(.05);
+  });
+
+  it('keeps ambient occlusion local to nearby scene depth', () => {
+    expect(ambientOcclusionDepthWeight(.52, .5, 30)).toBeGreaterThan(.95);
+    expect(ambientOcclusionDepthWeight(.9, .5, 30)).toBeLessThan(.05);
   });
 
   it('anchors a projected silhouette at its contact point', () => {

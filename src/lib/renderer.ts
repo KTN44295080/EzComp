@@ -1,6 +1,6 @@
 import { getAsset } from './assets';
 import { applyAdjustmentsToImageData, hasPixelAdjustments } from './colorMath';
-import { depthBandWeights, depthOcclusionWeight, groundDepthWeight, normalizedDepthBlur, projectedShadowMatrix } from './sceneGeometry';
+import { ambientOcclusionDepthWeight, depthBandWeights, depthOcclusionWeight, groundDepthWeight, normalizedDepthBlur, projectedShadowMatrix } from './sceneGeometry';
 import { defaultDepthOfField, defaultFinish, type CompositeDocument, type CompositeFinish, type RasterLayer } from '../types/editor';
 
 const rasterCache = new Map<string, { key: string; canvas: HTMLCanvasElement }>();
@@ -8,6 +8,7 @@ const shadowCache = new Map<string, HTMLCanvasElement>();
 const wrapCache = new Map<string, HTMLCanvasElement>();
 const occlusionCache = new Map<string, HTMLCanvasElement>();
 const projectedShadowCache = new Map<string, HTMLCanvasElement>();
+const ambientOcclusionCache = new Map<string, HTMLCanvasElement>();
 const boundsCache = new Map<string, { left: number; top: number; right: number; bottom: number }>();
 let checker: HTMLCanvasElement | undefined;
 let finishGrain: HTMLCanvasElement | undefined;
@@ -77,6 +78,23 @@ function depthOcclusionRaster(layer: RasterLayer, backdrop: RasterLayer): HTMLCa
   }
   alphaContext.putImageData(alpha, 0, 0); colorContext.globalCompositeOperation = 'destination-in'; colorContext.drawImage(alphaCanvas, 0, 0); occlusionCache.set(key, sampledColor); return sampledColor;
 }
+function ambientOcclusionRaster(layer: RasterLayer, backdrop: RasterLayer): HTMLCanvasElement | undefined {
+  if (layer.adjustments.ambientOcclusion <= 0 || layer.adjustments.ambientOcclusionRadius <= 0) return undefined;
+  const depthId = backdrop.depthOfField?.depthMapAssetId ?? '', key = `${layer.assetId}:${backdrop.assetId}:${depthId}:${Object.values(layer.transform).join(':')}:${Object.values(backdrop.transform).join(':')}:${Object.values(backdrop.depthOfField ?? {}).join(':')}:${layer.adjustments.ambientOcclusionRadius}:${layer.adjustments.ambientOcclusionDepthRange}:${layer.adjustments.occlusionDepth}:${layer.depthOfField?.sceneDepth ?? 'auto'}`, cached = ambientOcclusionCache.get(key); if (cached) return cached;
+  const mask = shadowRaster(layer), maskContext = mask?.getContext('2d', { willReadFrequently: true }); if (!mask || !maskContext) return undefined;
+  const blurred = createCanvas(mask.width, mask.height), blurredContext = blurred.getContext('2d', { willReadFrequently: true }); if (!blurredContext) return undefined;
+  const resolutionScale = mask.width / layer.width; blurredContext.filter = `blur(${Math.max(1.2, layer.adjustments.ambientOcclusionRadius * resolutionScale)}px)`; blurredContext.drawImage(mask, 0, 0); blurredContext.filter = 'none';
+  const depthAsset = depthId ? getAsset(depthId) : undefined, sampledDepth = depthAsset ? createCanvas(mask.width, mask.height) : undefined, depthContext = sampledDepth?.getContext('2d', { willReadFrequently: true });
+  if (depthAsset && depthContext) drawBackdropInLayerSpace(depthContext, layer, backdrop, depthAsset.source, mask.width, mask.height);
+  const original = maskContext.getImageData(0, 0, mask.width, mask.height).data, softened = blurredContext.getImageData(0, 0, mask.width, mask.height).data, depthPixels = depthContext?.getImageData(0, 0, mask.width, mask.height).data, bounds = visibleBounds(layer), top = (bounds?.top ?? 0) * mask.height / layer.height, bottom = Math.max(top + 1, (bounds?.bottom ?? layer.height) * mask.height / layer.height), subjectDepth = Math.max(0, Math.min(1, (layer.depthOfField?.sceneDepth ?? layer.adjustments.occlusionDepth) / 100));
+  const canvas = createCanvas(mask.width, mask.height), context = canvas.getContext('2d'); if (!context) return undefined; const output = context.createImageData(mask.width, mask.height);
+  for (let pixel = 0; pixel < mask.width * mask.height; pixel += 1) {
+    const offset = pixel * 4, inside = (original[offset + 3] ?? 0) / 255, soft = (softened[offset + 3] ?? 0) / 255, edge = Math.max(0, soft - inside * .82); if (edge <= .001) continue;
+    const y = Math.floor(pixel / mask.width), bodyY = Math.max(0, Math.min(1, (y - top) / (bottom - top))), contactCurve = bodyY * bodyY * (3 - 2 * bodyY), depthAlpha = (depthPixels?.[offset + 3] ?? 0) / 255, rawDepth = (depthPixels?.[offset] ?? 128) / 255, depth = backdrop.depthOfField?.invert ? 1 - rawDepth : rawDepth, proximity = depthAlpha > .01 ? ambientOcclusionDepthWeight(depth, subjectDepth, layer.adjustments.ambientOcclusionDepthRange) : 1, alpha = edge * (.38 + contactCurve * .62) * (.3 + proximity * .7);
+    output.data[offset] = 5; output.data[offset + 1] = 8; output.data[offset + 2] = 14; output.data[offset + 3] = Math.round(Math.min(1, alpha) * 255);
+  }
+  context.putImageData(output, 0, 0); ambientOcclusionCache.set(key, canvas); return canvas;
+}
 function projectedGroundShadow(documentModel: CompositeDocument, layer: RasterLayer, backdrop: RasterLayer | undefined): HTMLCanvasElement | undefined {
   if (layer.adjustments.shadowProjection <= 0 || layer.adjustments.shadowOpacity <= 0) return undefined;
   const depthId = backdrop?.depthOfField?.depthMapAssetId ?? '', key = `${documentModel.width}:${documentModel.height}:${layer.assetId}:${depthId}:${Object.values(layer.transform).join(':')}:${Object.values(layer.adjustments).join(':')}:${backdrop ? Object.values(backdrop.transform).join(':') : ''}:${backdrop ? Object.values(backdrop.depthOfField).join(':') : ''}`, cached = projectedShadowCache.get(key); if (cached) return cached;
@@ -106,7 +124,7 @@ function visibleBounds(layer: RasterLayer): { left: number; top: number; right: 
   const bounds = { left: minX * scaleX, top: minY * scaleY, right: (maxX + 1) * scaleX, bottom: (maxY + 1) * scaleY };
   boundsCache.set(layer.assetId, bounds); return bounds;
 }
-export function clearRasterCache(): void { rasterCache.clear(); shadowCache.clear(); wrapCache.clear(); occlusionCache.clear(); projectedShadowCache.clear(); boundsCache.clear(); }
+export function clearRasterCache(): void { rasterCache.clear(); shadowCache.clear(); wrapCache.clear(); occlusionCache.clear(); projectedShadowCache.clear(); ambientOcclusionCache.clear(); boundsCache.clear(); }
 export function isLayerEffectivelyVisible(layer: RasterLayer, layers: RasterLayer[]): boolean {
   if (!layer.visible) return false;
   const byId = new Map(layers.map((candidate) => [candidate.id, candidate]));
@@ -128,6 +146,8 @@ export function drawComposition(context: CanvasRenderingContext2D, documentModel
     const layer = layers[layerIndex]!;
     if (layer.kind === 'group' || !isLayerEffectivelyVisible(layer, layers) || layer.opacity <= 0) continue; const source = adjustedRaster(layer); if (!source) continue;
     const { transform } = layer, centerX = transform.x + layer.width * transform.scaleX / 2, centerY = transform.y + layer.height * transform.scaleY / 2, backdrop = backdropBelow(layers, layerIndex);
+    const ambientOcclusion = backdrop ? ambientOcclusionRaster(layer, backdrop) : undefined;
+    if (ambientOcclusion) { context.save(); context.globalAlpha = layer.opacity / 100 * layer.adjustments.ambientOcclusion / 100 * .9; context.globalCompositeOperation = 'multiply'; context.translate(centerX, centerY); context.rotate(transform.rotation * Math.PI / 180); context.scale(transform.scaleX, transform.scaleY); context.drawImage(ambientOcclusion, -layer.width / 2, -layer.height / 2, layer.width, layer.height); context.restore(); }
     if (layer.adjustments.shadowOpacity > 0) {
       const projection = projectedGroundShadow(documentModel, layer, backdrop), bounds = visibleBounds(layer);
       if (projection) { context.save(); context.globalAlpha = layer.opacity / 100 * layer.adjustments.shadowOpacity / 100 * layer.adjustments.shadowProjection / 100 * .82; context.globalCompositeOperation = 'multiply'; context.drawImage(projection, 0, 0, documentModel.width, documentModel.height); context.restore(); }
