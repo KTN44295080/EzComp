@@ -8,7 +8,7 @@ import { LayersPanel } from './components/LayersPanel';
 import { TopBar } from './components/TopBar';
 import { clearAssets } from './lib/assets';
 import { importFiles } from './lib/importers';
-import { clearRasterCache, exportComposition, type ExportFormat } from './lib/renderer';
+import { clearRasterCache, exportComposition, type ExportFormat } from './lib/groundingRenderer';
 import { clearAutosave, downloadProject, loadAutosave, readProject, saveAutosave } from './lib/storage';
 import { useEditorStore } from './store/editorStore';
 

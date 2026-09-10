@@ -1,0 +1,22 @@
+.grounding-panel { position: absolute; left: 16px; top: 16px; width: min(310px, calc(100% - 32px)); z-index: 7; border: 1px solid #424f67; border-radius: 10px; background: #1c2029f5; color: #e9edf4; box-shadow: 0 6px 24px #0005; font-size: 12px; }
+.grounding-panel > summary { padding: 12px 14px; font-weight: 600; cursor: pointer; }
+.grounding-panel small { color: #a6bdd5; margin-left: 5px; font-size: 10px; }
+.grounding-content { max-height: min(65vh, 690px); overflow-y: auto; padding: 0 14px 14px; display: grid; gap: 10px; }
+.grounding-content p { margin: 2px 0; line-height: 1.6; color: #b3bece; }
+.grounding-content label { display: block; margin: 5px 0; }
+.grounding-content select, .grounding-content input[type=number] { width: 100%; min-width: 0; margin-top: 4px; padding: 6px; color: #e9edf4; background: #111720; border: 1px solid #4a5667; border-radius: 4px; }
+.grounding-content button { padding: 7px 9px; color: #e7f1ff; background: #2d405b; border: 1px solid #526782; border-radius: 5px; cursor: pointer; }
+.grounding-content button:disabled { opacity: .45; cursor: not-allowed; }
+.grounding-content fieldset { border: 1px solid #434c5c; border-radius: 6px; margin: 0; padding: 9px; min-width: 0; }
+.grounding-content legend { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 5px; color: #b9d6ff; }
+.grounding-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.grounding-range > span { display: flex; justify-content: space-between; }
+.grounding-range input { width: 100%; accent-color: #87befa; }
+.grounding-range output { font-variant-numeric: tabular-nums; color: #b9d6ff; }
+.grounding-content details > summary { cursor: pointer; margin: 7px 0; color: #bad1ec; }
+.grounding-note { font-size: 11px; }
+.grounding-report { white-space: pre-line; max-height: 110px; overflow-y: auto; padding: 7px; background: #0e1722; border-radius: 5px; }
+.grounding-point-row { border-top: 1px solid #434c5c; padding: 8px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; align-items: center; }
+.grounding-point-row > button { justify-self: end; padding: 3px 7px; }
+.grounding-anchor { position: absolute; z-index: 6; width: 27px; height: 27px; border: 2px solid #dff6ff; border-radius: 50%; transform: translate(-50%, -50%); background: #215077d9; color: white; font-size: 12px; font-weight: 700; box-shadow: 0 0 0 2px #123a57, 0 2px 7px #000b; cursor: move; touch-action: none; }
+.grounding-anchor:focus-visible { outline: 3px solid #ffe9a3; outline-offset: 3px; }
